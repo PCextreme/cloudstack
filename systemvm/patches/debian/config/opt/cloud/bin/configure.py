@@ -16,13 +16,12 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-import sys
-import os
 import base64
-
 import logging
-import re
+import os
 import os.path
+import re
+import sys
 from fcntl import flock, LOCK_EX, LOCK_UN
 
 from cs.CsDatabag import CsDataBag
@@ -39,7 +38,6 @@ from cs.CsStaticRoutes import CsStaticRoutes
 
 
 class CsPassword(CsDataBag):
-
     TOKEN_FILE = "/tmp/passwdsrvrtoken"
 
     def process(self):
@@ -62,19 +60,28 @@ class CsPassword(CsDataBag):
             server_ip = ip.split('/')[0]
             proc = CsProcess(['/opt/cloud/bin/passwd_server_ip.py', server_ip])
             if proc.find():
-                update_command = 'curl --header "DomU_Request: save_password" "http://{SERVER_IP}:8080/" -F "ip={VM_IP}" -F "password={PASSWORD}" ' \
-                '-F "token={TOKEN}" >/dev/null 2>/dev/null &'.format(SERVER_IP=server_ip, VM_IP=vm_ip, PASSWORD=password, TOKEN=token)
+                update_command = (
+                    'curl --header "DomU_Request: save_password"'
+                    ' "http://{SERVER_IP}:8080/" -F "ip={VM_IP}"'
+                    ' -F "password={PASSWORD}" -F "token={TOKEN}"'
+                    '>/dev/null 2>/dev/null &'.format(
+                        SERVER_IP=server_ip,
+                        VM_IP=vm_ip,
+                        PASSWORD=password,
+                        TOKEN=token,
+                    )
+                )
                 result = CsHelper.execute(update_command)
                 logging.debug("Update password server result ==> %s", result)
 
 
 class CsAcl(CsDataBag):
-    """
-        Deal with Network acls
+    """Deal with Network acls
     """
 
     class AclIP():
-        """ For type Virtual Router """
+        """For type Virtual Router
+        """
 
         def __init__(self, obj, fw):
             self.fw = fw.get_fw()
@@ -147,19 +154,22 @@ class CsAcl(CsDataBag):
                                     " --icmp-type %s -j %s" % (icmp_type, self.rule['action'])])
                 else:
                     fwr = " -I FW_EGRESS_RULES"
-                    #In case we have a default rule (accept all or drop all), we have to evaluate the action again.
+                    # In case we have a default rule (accept all or drop all),
+                    # we have to evaluate the action again.
                     if rule['type'] == 'all' and not rule['source_cidr_list']:
                         fwr = " -A FW_EGRESS_RULES"
                         # For default egress ALLOW or DENY, the logic is inverted.
-                        # Having default_egress_policy == True, means that the default rule should have ACCEPT,
-                        # otherwise DROP. The rule should be appended, not inserted.
+                        # Having default_egress_policy == True means that
+                        # the default rule should have ACCEPT, otherwise DROP.
+                        # The rule should be appended, not inserted.
                         if self.rule['default_egress_policy']:
                             self.rule['action'] = "ACCEPT"
                         else:
                             self.rule['action'] = "DROP"
                     else:
-                        # For other rules added, if default_egress_policy == True, following rules should be DROP,
-                        # otherwise ACCEPT
+                        # For other rules added,
+                        # if default_egress_policy == True,
+                        # following rules should be DROP, otherwise ACCEPT
                         if self.rule['default_egress_policy']:
                             self.rule['action'] = "DROP"
                         else:
@@ -217,7 +227,8 @@ class CsAcl(CsDataBag):
                 self.table = ""
                 self.device = acl.device
                 self.direction = direction
-                # acl is an object of the AclDevice type. So, its fw attribute is already a list.
+                # acl is an object of the AclDevice type.
+                # So, its fw attribute is already a list.
                 self.fw = acl.fw
                 self.chain = config.get_ingress_chain(self.device, acl.ip)
                 self.dest = "-s %s" % rule['cidr']
@@ -325,7 +336,8 @@ class CsVmMetadata(CsDataBag):
             except OSError as e:
                 # error 17 is already exists, we do it this way for concurrency
                 if e.errno != 17:
-                    print "failed to make directories " + metamanifestdir + " due to :" + e.strerror
+                    print "failed to make directories %s due to : %s" % (
+                        metamanifestdir, e.strerror)
                     sys.exit(1)
             if os.path.exists(metamanifest):
                 fh = open(metamanifest, "a+")
@@ -375,7 +387,8 @@ class CsVmMetadata(CsDataBag):
         try:
             os.makedirs(htaccessFolder, 0755)
         except OSError as e:
-            # error 17 is already exists, we do it this way for sake of concurrency
+            # error 17 is already exists,
+            # we do it this way for sake of concurrency
             if e.errno != 17:
                 print "failed to make directories " + htaccessFolder + " due to :" + e.strerror
                 sys.exit(1)
@@ -427,8 +440,7 @@ class CsVmMetadata(CsDataBag):
 class CsSite2SiteVpn(CsDataBag):
     """
     Setup any configured vpns (using swan)
-    left is the local machine
-    right is where the clients connect from
+    Left is the local machine, right is where the clients connect from.
     """
 
     VPNCONFDIR = "/etc/ipsec.d"
@@ -595,7 +607,6 @@ class CsVpnUser(CsDataBag):
                         if pid:
                             logging.debug("killing process %s", pid)
                             CsHelper.execute('kill -9 %s' % pid)
-
 
 
 class CsRemoteAccessVpn(CsDataBag):
@@ -883,7 +894,8 @@ class CsForwardingRules(CsDataBag):
 
 
 def main(argv):
-    # The file we are currently processing, if it is "cmd_line.json" everything will be processed.
+    # The file we are currently processing, if it is "cmd_line.json"
+    # everything will be processed.
     process_file = argv[1]
 
     # process_file can be None, if so assume cmd_line.json
@@ -986,7 +998,8 @@ def main(argv):
 
         logging.debug("Configuring iptables rules done ...saving rules")
 
-        # Save iptables configuration - will be loaded on reboot by the iptables-restore that is configured on /etc/rc.local
+        # Save iptables configuration - will be loaded on reboot
+        # by the iptables-restore that is configured on /etc/rc.local
         CsHelper.save_iptables("iptables-save", "/etc/iptables/router_rules.v4")
         CsHelper.save_iptables("ip6tables-save", "/etc/iptables/router_rules.v6")
 
