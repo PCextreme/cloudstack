@@ -15,8 +15,6 @@
 #specific language governing permissions and limitations
 #under the License.
 
-__author__ = 'frank'
-
 import subprocess
 import urllib
 import hmac
@@ -26,6 +24,8 @@ import traceback
 import logging
 
 from flask import Flask
+
+__author__ = 'frank'
 
 app = Flask(__name__)
 
@@ -46,9 +46,22 @@ class ShellCmd(object):
         '''
         self.cmd = cmd
         if pipe:
-            self.process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, executable='/bin/sh', cwd=workdir)
+            self.process = subprocess.Popen(
+                cmd,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stdin=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                executable='/bin/sh',
+                cwd=workdir,
+            )
         else:
-            self.process = subprocess.Popen(cmd, shell=True, executable='/bin/sh', cwd=workdir)
+            self.process = subprocess.Popen(
+                cmd,
+                shell=True,
+                executable='/bin/sh',
+                cwd=workdir,
+            )
 
         self.stdout = None
         self.stderr = None
@@ -81,13 +94,13 @@ class Server(object):
 
     def _get_credentials(self):
         if not self.apikey or not self.secretkey:
-            with open(self.CMDLINE, 'r') as fd:
-                cmdline = fd.read()
-                for p in cmdline.split():
-                    if 'baremetalnotificationsecuritykey' in p:
-                        self.secretkey = p.split("=")[1]
-                    if 'baremetalnotificationapikey' in p:
-                        self.apikey = p.split("=")[1]
+            with open(self.CMDLINE, 'r') as fileobj:
+                cmdline = fileobj.read()
+                for part in cmdline.split():
+                    if 'baremetalnotificationsecuritykey' in part:
+                        self.secretkey = part.split("=")[1]
+                    if 'baremetalnotificationapikey' in part:
+                        self.apikey = part.split("=")[1]
 
         if not self.apikey:
             raise Exception('cannot find baremetalnotificationapikey in %s' % Server.CMDLINE)
@@ -98,11 +111,11 @@ class Server(object):
 
     def _get_mgmt_ip(self):
         if not self.mgmtIp:
-            with open(self.CMDLINE, 'r') as fd:
-                cmdline = fd.read()
-                for p in cmdline.split():
-                    if 'host' in p:
-                        self.mgmtIp = p.split("=")[1]
+            with open(self.CMDLINE, 'r') as fileobj:
+                cmdline = fileobj.read()
+                for part in cmdline.split():
+                    if 'host' in part:
+                        self.mgmtIp = part.split("=")[1]
                         break
 
         if not self.mgmtIp:
@@ -112,11 +125,11 @@ class Server(object):
 
     def _get_mgmt_port(self):
         if not self.mgmtPort:
-            with open(self.CMDLINE, 'r') as fd:
-                cmdline = fd.read()
-                for p in cmdline.split():
-                    if 'port' in p:
-                        self.mgmtPort = p.split("=")[1]
+            with open(self.CMDLINE, 'r') as fileobj:
+                cmdline = fileobj.read()
+                for part in cmdline.split():
+                    if 'port' in part:
+                        self.mgmtPort = part.split("=")[1]
                         break
 
         if not self.mgmtIp:
@@ -134,13 +147,33 @@ class Server(object):
 
         request = zip(reqs.keys(), reqs.values())
         request.sort(key=lambda x: str.lower(x[0]))
-        hashStr = "&".join(["=".join([str.lower(r[0]), str.lower(urllib.quote_plus(str(r[1]))).replace("+", "%20").replace('=', '%3d')]) for r in request])
-        sig = urllib.quote_plus(base64.encodestring(hmac.new(secretkey, hashStr, hashlib.sha1).digest()).strip())
+        hashStr = "&".join(
+            [
+                "=".join([
+                    str.lower(r[0]),
+                    str.lower(
+                        urllib.quote_plus(str(r[1]))
+                    ).replace("+", "%20").replace('=', '%3d')
+                ])
+                for r in request
+            ]
+        )
+        sig = urllib.quote_plus(
+            base64.encodestring(
+                hmac.new(secretkey, hashStr, hashlib.sha1).digest()
+            ).strip()
+        )
         return sig
 
     def notify_provisioning_done(self, mac):
         sig = self._make_sign(mac)
-        cmd = 'http://%s:%s/client/api?command=notifyBaremetalProvisionDone&mac=%s&apiKey=%s&signature=%s' % (self._get_mgmt_ip(), self._get_mgmt_port(), mac, self.apikey, sig)
+        cmd = 'http://%s:%s/client/api?command=notifyBaremetalProvisionDone&mac=%s&apiKey=%s&signature=%s' % (
+            self._get_mgmt_ip(),
+            self._get_mgmt_port(),
+            mac,
+            self.apikey,
+            sig,
+        )
         shell("curl -X GET '%s'" % cmd)
         return ''
 
@@ -157,5 +190,9 @@ def notify_provisioning_done(mac):
 
 if __name__ == '__main__':
     server = Server()
-    shell("iptables-save | grep -- '-A INPUT -i eth0 -p tcp -m tcp --dport 10086 -j ACCEPT' > /dev/null || iptables -I INPUT -i eth0 -p tcp -m tcp --dport 10086 -j ACCEPT")
+    shell(
+        "iptables-save | "
+        "grep -q -- '-A INPUT -i eth0 -p tcp -m tcp --dport 10086 -j ACCEPT' "
+        "|| iptables -I INPUT -i eth0 -p tcp -m tcp --dport 10086 -j ACCEPT"
+    )
     app.run(host='0.0.0.0', port=10086, debug=True)

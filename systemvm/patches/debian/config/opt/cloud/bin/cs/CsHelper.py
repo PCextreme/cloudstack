@@ -24,13 +24,18 @@ import logging
 import os.path
 import re
 import shutil
-from netaddr import *
-from pprint import pprint
+import sys
+from netaddr import IPNetwork
 
 PUBLIC_INTERFACES = {"router" : "eth2", "vpcrouter" : "eth1"}
 
-STATE_COMMANDS = {"router" : "ip addr | grep eth0 | grep inet | wc -l | xargs bash -c  'if [ $0 == 2 ]; then echo \"MASTER\"; else echo \"BACKUP\"; fi'",
-                  "vpcrouter" : "ip addr | grep eth1 | grep state | awk '{print $9;}' | xargs bash -c 'if [ $0 == \"UP\" ]; then echo \"MASTER\"; else echo \"BACKUP\"; fi'"}
+STATE_COMMANDS = {
+    "router": "ip addr | grep eth0 | grep inet | wc -l | xargs bash -c '"
+              "if [ $0 == 2 ]; then echo \"MASTER\"; else echo \"BACKUP\"; fi'",
+    "vpcrouter": "ip addr | grep eth1 | grep state | awk '{print $9;}' |"
+                 "xargs bash -c 'if [ $0 == \"UP\" ];"
+                 "then echo \"MASTER\"; else echo \"BACKUP\"; fi'",
+}
 
 def reconfigure_interfaces(router_config, interfaces):
     for interface in interfaces:
@@ -44,10 +49,11 @@ def reconfigure_interfaces(router_config, interfaces):
 
                 if router_config.is_redundant() and interface.is_public():
                     state_cmd = STATE_COMMANDS[router_config.get_type()]
-                    logging.info("Check state command => %s" % state_cmd)
+                    logging.info("Check state command => %s", state_cmd)
                     state = execute(state_cmd)[0]
-                    logging.info("Route state => %s" % state)
-                    if interface.get_device() != PUBLIC_INTERFACES[router_config.get_type()] and state == "MASTER":
+                    logging.info("Route state => %s", state)
+                    if interface.get_device() != PUBLIC_INTERFACES[router_config.get_type()] \
+                    and state == "MASTER":
                         execute(cmd)
                 else:
                     execute(cmd)
@@ -71,7 +77,8 @@ def umount_tmpfs(name):
 
 
 def rm(name):
-    os.remove(name) if os.path.isfile(name) else None
+    if os.path.isfile(name):
+        os.remove(name)
 
 
 def rmdir(name):
@@ -82,10 +89,13 @@ def rmdir(name):
 def mkdir(name, mode, fatal):
     try:
         os.makedirs(name, mode)
-    except OSError as e:
-        if e.errno != 17:
-            print "failed to make directories " + name + " due to :" + e.strerror
-            if(fatal):
+    except OSError as error:
+        if error.errno != 17:
+            print "failed to make directories %s due to: %s" % (
+                name,
+                error.strerror,
+            )
+            if fatal:
                 sys.exit(1)
 
 
@@ -110,7 +120,7 @@ def bool_to_yn(val):
 
 def get_device_info():
     """ Returns all devices on system with their ipv4 ip netmask """
-    list = []
+    data = []
     for i in execute("ip addr show"):
         vals = i.strip().lstrip().rstrip().split()
         if vals[0] == "inet":
@@ -119,8 +129,8 @@ def get_device_info():
             to['dev'] = vals[-1]
             to['network'] = IPNetwork(to['ip'])
             to['dnsmasq'] = False
-            list.append(to)
-    return list
+            data.append(to)
+    return data
 
 
 def get_domain():
@@ -148,7 +158,7 @@ def get_ip(device):
     cmd = "ip addr show dev %s" % device
     for i in execute(cmd):
         vals = i.lstrip().split()
-        if (vals[0] == 'inet'):
+        if vals[0] == 'inet':
             return vals[1]
     return ""
 
@@ -165,11 +175,11 @@ def addifmissing(filename, val):
     """ Add something to a file
     if it is not already there """
     if not os.path.isfile(filename):
-        logging.debug("File %s doesn't exist, so create" % filename)
+        logging.debug("File %s doesn't exist, so create", filename)
         open(filename, "w").close()
     if not definedinfile(filename, val):
         updatefile(filename, val + "\n", "a")
-        logging.debug("Added %s to file %s" % (val, filename))
+        logging.debug("Added %s to file %s", val, filename)
         return True
     return False
 
@@ -181,36 +191,46 @@ def get_hostname():
 
 def execute(command):
     """ Execute command """
-    logging.debug("Executing: %s" % command)
-    p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-    result = p.communicate()[0]
+    logging.debug("Executing: %s", command)
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        shell=True,
+    )
+    result = process.communicate()[0]
     return result.splitlines()
 
 
 def save_iptables(command, iptables_file):
     """ Execute command """
-    logging.debug("Saving iptables for %s" % command)
+    logging.debug("Saving iptables for %s", command)
 
     result = execute(command)
-    fIptables = open(iptables_file, "w+")
+    output = open(iptables_file, "w+")
 
     for line in result:
-        fIptables.write(line)
-        fIptables.write("\n")
-    fIptables.close()
+        output.write(line)
+        output.write("\n")
+    output.close()
 
 
 def execute2(command):
     """ Execute command """
-    logging.debug("Executing: %s" % command)
-    p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-    p.wait()
-    return p
+    logging.debug("Executing: %s", command)
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        shell=True,
+    )
+    process.wait()
+    return process
 
 
 def service(name, op):
     execute("service %s %s" % (name, op))
-    logging.info("Service %s %s" % (name, op))
+    logging.info("Service %s %s", name, op)
 
 
 def start_if_stopped(name):
@@ -223,7 +243,7 @@ def hup_dnsmasq(name, user):
     pid = ""
     for i in execute("ps -ef | grep %s" % name):
         vals = i.lstrip().split()
-        if (vals[0] == user):
+        if vals[0] == user:
             pid = vals[1]
     if pid:
         logging.info("Sent hup to %s", name)
@@ -246,6 +266,6 @@ def copy(src, dest):
     try:
         shutil.copy2(src, dest)
     except IOError:
-        logging.Error("Could not copy %s to %s" % (src, dest))
+        logging.error("Could not copy %s to %s", src, dest)
     else:
-        logging.info("Copied %s to %s" % (src, dest))
+        logging.info("Copied %s to %s", src, dest)

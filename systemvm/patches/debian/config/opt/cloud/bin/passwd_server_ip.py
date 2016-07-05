@@ -31,7 +31,6 @@ import os
 import sys
 import syslog
 import threading
-import urlparse
 
 from BaseHTTPServer   import BaseHTTPRequestHandler, HTTPServer
 from SocketServer     import ThreadingMixIn #, ForkingMixIn
@@ -65,7 +64,8 @@ def loadPasswordFile():
     try:
         with file(getPasswordFile()) as f:
             for line in f:
-                if '=' not in line: continue
+                if '=' not in line:
+                    continue
                 key, value = line.strip().split('=', 1)
                 passMap[key] = value
     except IOError:
@@ -131,31 +131,44 @@ class PasswordRequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         form = cgi.FieldStorage(
-                    fp=self.rfile,
-                    headers=self.headers,
-                    environ={'REQUEST_METHOD':'POST',
-                             'CONTENT_TYPE':self.headers['Content-Type'],
+            fp=self.rfile,
+            headers=self.headers,
+            environ={'REQUEST_METHOD':'POST',
+                     'CONTENT_TYPE':self.headers['Content-Type'],
                     })
         self.send_response(200)
         self.end_headers()
         clientAddress = self.client_address[0]
         if clientAddress not in ['localhost', '127.0.0.1', listeningAddress]:
-            syslog.syslog('serve_password: non-localhost IP trying to save password: %s' % clientAddress)
+            syslog.syslog(
+                'serve_password: non-localhost IP trying to save password: %s' %
+                clientAddress
+            )
             self.send_response(403)
             return
-        if 'ip' not in form or 'password' not in form or 'token' not in form or self.headers.get('DomU_Request') != 'save_password':
-            syslog.syslog('serve_password: request trying to save password does not contain both ip and password')
+        if 'ip' not in form or 'password' not in form or 'token' not in form \
+        or self.headers.get('DomU_Request') != 'save_password':
+            syslog.syslog(
+                'serve_password: request trying to save password '
+                'does not contain both ip and password'
+            )
             self.send_response(403)
             return
         token = form['token'].value
         if not checkToken(token):
-            syslog.syslog('serve_password: invalid save_password token received from %s' % clientAddress)
+            syslog.syslog(
+                'serve_password: invalid save_password token received from %s' %
+                clientAddress
+            )
             self.send_response(403)
             return
         ip = form['ip'].value
         password = form['password'].value
         if not ip or not password:
-            syslog.syslog('serve_password: empty ip/password[%s/%s] received from savepassword' % (ip, password))
+            syslog.syslog(
+                'serve_password: empty ip/password[%s/%s] '
+                'received from savepassword' % (ip, password)
+            )
             return
         syslog.syslog('serve_password: password saved for VM IP %s' % ip)
         setPassword(ip, password)
@@ -163,11 +176,11 @@ class PasswordRequestHandler(BaseHTTPRequestHandler):
         return
 
     def log_message(self, format, *args):
-            return
+        return
 
 
-def serve(HandlerClass = PasswordRequestHandler,
-          ServerClass = ThreadedHTTPServer):
+def serve(HandlerClass=PasswordRequestHandler,
+          ServerClass=ThreadedHTTPServer):
 
     global listeningAddress
     if len(sys.argv) > 1:

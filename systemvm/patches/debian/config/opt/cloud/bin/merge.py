@@ -36,12 +36,13 @@ import cs_remoteaccessvpn
 import cs_vpnusers
 import cs_staticroutes
 
-from pprint import pprint
-
 
 class DataBag:
 
     DPATH = "/etc/cloudstack"
+    dbag = None
+    key = None
+    fpath = None
 
     def __init__(self):
         self.bdata = {}
@@ -57,7 +58,7 @@ class DataBag:
             logging.debug("Creating data bag type %s", self.key)
             data.update({"id": self.key})
         else:
-            logging.debug("Loading data bag type %s",  self.key)
+            logging.debug("Loading data bag type %s", self.key)
             data = json.load(handle)
             handle.close()
         self.dbag = data
@@ -83,6 +84,7 @@ class DataBag:
 class updateDataBag:
 
     DPATH = "/etc/cloudstack"
+    newData = None
 
     def __init__(self, qFile):
         self.qFile = qFile
@@ -92,7 +94,8 @@ class updateDataBag:
 
     def process(self):
         self.db = DataBag()
-        if (self.qFile.type == "staticnatrules" or self.qFile.type == "forwardrules"):
+        if self.qFile.type == "staticnatrules" \
+        or self.qFile.type == "forwardrules":
             self.db.setKey("forwardingrules")
         else:
             self.db.setKey(self.qFile.type)
@@ -119,7 +122,8 @@ class updateDataBag:
             dbag = self.processVmData(self.db.getDataBag())
         elif self.qFile.type == 'dhcpentry':
             dbag = self.process_dhcp_entry(self.db.getDataBag())
-        elif self.qFile.type == 'staticnatrules' or self.qFile.type == 'forwardrules':
+        elif self.qFile.type == 'staticnatrules' \
+        or self.qFile.type == 'forwardrules':
             dbag = self.processForwardingRules(self.db.getDataBag())
         elif self.qFile.type == 'site2sitevpn':
             dbag = self.process_site2sitevpn(self.db.getDataBag())
@@ -142,24 +146,24 @@ class updateDataBag:
         self.db.save(dbag)
 
     def processGuestNetwork(self, dbag):
-        d = self.qFile.data
-        dp = {}
-        dp['public_ip'] = d['router_guest_ip']
-        dp['netmask'] = d['router_guest_netmask']
-        dp['source_nat'] = False
-        dp['add'] = d['add']
-        dp['one_to_one_nat'] = False
-        dp['gateway'] = d['router_guest_gateway']
-        dp['nic_dev_id'] = d['device'][3]
-        dp['nw_type'] = 'guest'
-        dp = PrivateGatewayHack.update_network_type_for_privategateway(dbag, dp)
-        qf = QueueFile()
-        qf.load({'ip_address': [dp], 'type': 'ips'})
-        if 'domain_name' not in d.keys() or d['domain_name'] == '':
-            d['domain_name'] = "cloudnine.internal"
+        data = self.qFile.data
+        datap = {}
+        datap['public_ip'] = data['router_guest_ip']
+        datap['netmask'] = data['router_guest_netmask']
+        datap['source_nat'] = False
+        datap['add'] = data['add']
+        datap['one_to_one_nat'] = False
+        datap['gateway'] = data['router_guest_gateway']
+        datap['nic_dev_id'] = data['device'][3]
+        datap['nw_type'] = 'guest'
+        datap = PrivateGatewayHack.update_network_type_for_privategateway(dbag, datap)
+        queuefile = QueueFile()
+        queuefile.load({'ip_address': [datap], 'type': 'ips'})
+        if not data.get('domain_name'):
+            data['domain_name'] = "cloudnine.internal"
 
-        d = PrivateGatewayHack.update_network_type_for_privategateway(dbag, d)
-        return cs_guestnetwork.merge(dbag, d)
+        data = PrivateGatewayHack.update_network_type_for_privategateway(dbag, data)
+        return cs_guestnetwork.merge(dbag, data)
 
     def process_dhcp_entry(self, dbag):
         return cs_dhcp.merge(dbag, self.qFile.data)
@@ -196,8 +200,8 @@ class updateDataBag:
         return cs_forwardingrules.merge(dbag, self.qFile.data)
 
     def processIP(self, dbag):
-        for ip in self.qFile.data["ip_address"]:
-            dbag = cs_ip.merge(dbag, ip)
+        for ip_address in self.qFile.data["ip_address"]:
+            dbag = cs_ip.merge(dbag, ip_address)
         return dbag
 
     def processCL(self, dbag):
@@ -205,34 +209,34 @@ class updateDataBag:
         # "eth0ip": "192.168.56.32",
         # "eth0mask": "255.255.255.0",
         self.newData = []
-        if (self.qFile.data['cmd_line']['type'] == "router"):
+        if self.qFile.data['cmd_line']['type'] == "router":
             self.processCLItem('0', "guest")
             self.processCLItem('1', "control")
             self.processCLItem('2', "public")
-        elif (self.qFile.data['cmd_line']['type'] == "vpcrouter"):
+        elif self.qFile.data['cmd_line']['type'] == "vpcrouter":
             self.processCLItem('0', "control")
-        elif (self.qFile.data['cmd_line']['type'] == "dhcpsrvr"):
+        elif self.qFile.data['cmd_line']['type'] == "dhcpsrvr":
             self.processCLItem('0', "guest")
             self.processCLItem('1', "control")
         return cs_cmdline.merge(dbag, self.qFile.data)
 
     def processCLItem(self, num, nw_type):
-        key = 'eth' + num + 'ip'
-        dp = {}
-        if(key in self.qFile.data['cmd_line']):
-            dp['public_ip'] = self.qFile.data['cmd_line'][key]
-            dp['netmask'] = self.qFile.data['cmd_line']['eth' + num + 'mask']
-            dp['source_nat'] = False
-            dp['add'] = True
-            dp['one_to_one_nat'] = False
-            if('localgw' in self.qFile.data['cmd_line']):
-                dp['gateway'] = self.qFile.data['cmd_line']['localgw']
+        key = 'eth%sip' % num
+        datap = {}
+        if key in self.qFile.data['cmd_line']:
+            datap['public_ip'] = self.qFile.data['cmd_line'][key]
+            datap['netmask'] = self.qFile.data['cmd_line']['eth' + num + 'mask']
+            datap['source_nat'] = False
+            datap['add'] = True
+            datap['one_to_one_nat'] = False
+            if 'localgw' in self.qFile.data['cmd_line']:
+                datap['gateway'] = self.qFile.data['cmd_line']['localgw']
             else:
-                dp['gateway'] = 'None'
-            dp['nic_dev_id'] = num
-            dp['nw_type'] = nw_type
-            qf = QueueFile()
-            qf.load({'ip_address': [dp], 'type': 'ips'})
+                datap['gateway'] = 'None'
+            datap['nic_dev_id'] = num
+            datap['nw_type'] = nw_type
+            queuefile = QueueFile()
+            queuefile.load({'ip_address': [datap], 'type': 'ips'})
 
     def processVmData(self, dbag):
         cs_vmdata.merge(dbag, self.qFile.data)
@@ -269,27 +273,28 @@ class QueueFile:
     configCache = "/var/cache/cloud"
     keep = True
     data = {}
+    type = None
 
     def load(self, data):
         if data is not None:
             self.data = data
             self.type = self.data["type"]
-            proc = updateDataBag(self)
+            updateDataBag(self)
             return
-        fn = self.configCache + '/' + self.fileName
+        filename = self.configCache + '/' + self.fileName
         try:
-            handle = open(fn)
+            handle = open(filename)
         except IOError:
-            logging.error("Could not open %s", fn)
+            logging.error("Could not open %s", filename)
         else:
             self.data = json.load(handle)
             self.type = self.data["type"]
             handle.close()
             if self.keep:
-                self.__moveFile(fn, self.configCache + "/processed")
+                self.__moveFile(filename, self.configCache + "/processed")
             else:
-                os.remove(fn)
-            proc = updateDataBag(self)
+                os.remove(filename)
+            updateDataBag(self)
 
     def setFile(self, name):
         self.fileName = name
@@ -315,23 +320,34 @@ class PrivateGatewayHack:
 
     @classmethod
     def update_network_type_for_privategateway(cls, dbag, data):
-        ip = data['router_guest_ip'] if 'router_guest_ip' in data.keys() else data['public_ip']
+        if 'router_guest_ip' in data:
+            ip = data['router_guest_ip']
+        else:
+            ip = data['public_ip']
 
         initial_data = cls.load_inital_data()
         has_private_gw_ip = cls.if_config_has_privategateway(initial_data)
-        private_gw_matches = 'privategateway' in initial_data['config'] and cls.ip_matches_private_gateway_ip(ip, initial_data['config']['privategateway'])
+        private_gw_matches = 'privategateway' in initial_data['config'] \
+            and cls.ip_matches_private_gateway_ip(ip, initial_data['config']['privategateway'])
 
         if has_private_gw_ip and private_gw_matches:
             data['nw_type'] = "public"
-            logging.debug("Updating nw_type for ip %s" % ip)
+            logging.debug("Updating nw_type for ip %s", ip)
         else:
-            logging.debug("Not updating nw_type for ip %s because has_private_gw_ip = %s and private_gw_matches = %s " % (ip, has_private_gw_ip, private_gw_matches))
+            logging.debug(
+                "Not updating nw_type for ip %s "
+                "because has_private_gw_ip = %s and private_gw_matches = %s",
+                ip,
+                has_private_gw_ip,
+                private_gw_matches,
+            )
         return data
 
 
     @classmethod
     def if_config_has_privategateway(cls, dbag):
-        return 'privategateway' in dbag['config'].keys() and dbag['config']['privategateway'] != "None"
+        return 'privategateway' in dbag['config'].keys() \
+            and dbag['config']['privategateway'] != "None"
 
 
     @classmethod
@@ -348,6 +364,6 @@ class PrivateGatewayHack:
         initial_data_bag.setKey('cmdline')
         initial_data_bag.load()
         initial_data = initial_data_bag.getDataBag()
-        logging.debug("Initial data = %s" % initial_data)
+        logging.debug("Initial data = %s", initial_data)
 
         return initial_data
