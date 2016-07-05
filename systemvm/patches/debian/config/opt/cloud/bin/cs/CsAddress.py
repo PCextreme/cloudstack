@@ -282,8 +282,8 @@ class CsIP:
                 logging.info("Configuring address %s on device %s", self.ip(), self.dev)
                 cmd = "ip addr add dev %s %s brd +" % (self.dev, self.ip())
                 CsHelper.execute(cmd)
-            except Exception as e:
-                logging.info("Exception occurred ==> %s", e)
+            except Exception as error:
+                logging.info("Exception occurred ==> %s", error)
 
         else:
             self.delete(self.ip())
@@ -328,8 +328,8 @@ class CsIP:
                 route.add_defaultroute(self.cl.get_gateway())
 
     def set_mark(self):
-        cmd = "-A PREROUTING -i %s -m state --state NEW -j CONNMARK --set-xmark %s/0xffffffff" % \
-            (self.getDevice(), self.dnum)
+        cmd = "-A PREROUTING -i %s -m state --state NEW -j CONNMARK " \
+              "--set-xmark %s/0xffffffff" % (self.getDevice(), self.dnum)
         self.fw.append(["mangle", "", cmd])
 
     def get_type(self):
@@ -357,7 +357,9 @@ class CsIP:
         self.fw.append(
             ["filter", "", "-A FW_OUTBOUND -m state --state RELATED,ESTABLISHED -j ACCEPT"])
         self.fw.append(
-            ["filter", "", "-A INPUT -i eth1 -p tcp -m tcp --dport 3922 -m state --state NEW,ESTABLISHED -j ACCEPT"])
+            ["filter", "",
+             "-A INPUT -i eth1 -p tcp -m tcp --dport 3922 -m state "
+             "--state NEW,ESTABLISHED -j ACCEPT"])
 
         self.fw.append(["filter", "", "-P INPUT DROP"])
         self.fw.append(["filter", "", "-P FORWARD DROP"])
@@ -366,68 +368,95 @@ class CsIP:
     def fw_router(self):
         if self.config.is_vpc():
             return
-        self.fw.append(["mangle", "front", "-A PREROUTING " +
-                        "-m state --state RELATED,ESTABLISHED " +
-                        "-j CONNMARK --restore-mark --nfmask 0xffffffff --ctmask 0xffffffff"])
+        self.fw.append(["mangle", "front", "-A PREROUTING "
+                        "-m state --state RELATED,ESTABLISHED "
+                        "-j CONNMARK --restore-mark --nfmask 0xffffffff "
+                        "--ctmask 0xffffffff"])
 
         if self.get_type() in ["public"]:
             self.fw.append(["mangle", "front",
-                            "-A PREROUTING " +
-                            "-d %s/32 -j VPN_%s" % (self.address['public_ip'], self.address['public_ip'])])
+                            "-A PREROUTING -d %s/32 -j VPN_%s" % (
+                                self.address['public_ip'],
+                                self.address['public_ip'])])
             self.fw.append(["mangle", "front",
-                            "-A PREROUTING " +
-                            "-d %s/32 -j FIREWALL_%s" % (self.address['public_ip'], self.address['public_ip'])])
+                            "-A PREROUTING -d %s/32 -j FIREWALL_%s" % (
+                                self.address['public_ip'],
+                                self.address['public_ip'])])
             self.fw.append(["mangle", "front",
-                            "-A FIREWALL_%s " % self.address['public_ip'] +
-                            "-m state --state RELATED,ESTABLISHED -j ACCEPT"])
+                            "-A FIREWALL_%s -m state "
+                            "--state RELATED,ESTABLISHED -j ACCEPT" % (
+                                self.address['public_ip'],
+                            )])
             self.fw.append(["mangle", "",
                             "-A FIREWALL_%s DROP" % self.address['public_ip']])
             self.fw.append(["mangle", "",
-                            "-A VPN_%s -m state --state RELATED,ESTABLISHED -j ACCEPT" % self.address['public_ip']])
+                            "-A VPN_%s -m state --state RELATED,ESTABLISHED "
+                            "-j ACCEPT" % self.address['public_ip']])
             self.fw.append(["mangle", "",
                             "-A VPN_%s -j RETURN" % self.address['public_ip']])
             self.fw.append(["mangle", "front",
                             "-A POSTROUTING " +
-                            "-p udp -m udp --dport 68 -j CHECKSUM --checksum-fill"])
+                            "-p udp -m udp --dport 68 -j CHECKSUM "
+                            "--checksum-fill"])
             self.fw.append(["nat", "",
-                            "-A POSTROUTING -o eth2 -j SNAT --to-source %s" % self.address['public_ip']])
+                            "-A POSTROUTING -o eth2 -j SNAT "
+                            "--to-source %s" % self.address['public_ip']])
             self.fw.append(["mangle", "",
-                            "-A PREROUTING -i %s -m state --state NEW " % self.dev +
-                            "-j CONNMARK --set-xmark %s/0xffffffff" % self.dnum])
+                            "-A PREROUTING -i %s -m state --state NEW "
+                            "-j CONNMARK --set-xmark %s/0xffffffff" % (
+                                self.dev,
+                                self.dnum)])
             self.fw.append(
-                ["mangle", "", "-A FIREWALL_%s -j DROP" % self.address['public_ip']])
+                ["mangle", "", "-A FIREWALL_%s -j DROP" % (
+                    self.address['public_ip'],)])
 
         self.fw.append(["filter", "", "-A INPUT -d 224.0.0.18/32 -j ACCEPT"])
         self.fw.append(["filter", "", "-A INPUT -d 225.0.0.50/32 -j ACCEPT"])
-        self.fw.append(["filter", "", "-A INPUT -i %s -m state --state RELATED,ESTABLISHED -j ACCEPT" %
-                        self.dev])
+        self.fw.append(["filter", "", "-A INPUT -i %s -m state "
+                        "--state RELATED,ESTABLISHED -j ACCEPT" % self.dev])
         self.fw.append(["filter", "", "-A INPUT -p icmp -j ACCEPT"])
         self.fw.append(["filter", "", "-A INPUT -i lo -j ACCEPT"])
 
         if self.get_type() in ["guest"]:
             self.fw.append(
-                ["filter", "", "-A INPUT -i %s -p udp -m udp --dport 67 -j ACCEPT" % self.dev])
+                ["filter", "",
+                 "-A INPUT -i %s -p udp -m udp --dport 67 -j ACCEPT" % self.dev])
             self.fw.append(
                 ["filter", "", "-A INPUT -i %s -p udp -m udp --dport 53 -j ACCEPT" % self.dev])
             self.fw.append(
                 ["filter", "", "-A INPUT -i %s -p tcp -m tcp --dport 53 -j ACCEPT" % self.dev])
             self.fw.append(
-                ["filter", "", "-A INPUT -i %s -p tcp -m tcp --dport 80 -m state --state NEW -j ACCEPT" % self.dev])
+                ["filter", "",
+                 "-A INPUT -i %s -p tcp -m tcp --dport 80 "
+                 "-m state --state NEW -j ACCEPT" % self.dev])
             self.fw.append(
-                ["filter", "", "-A INPUT -i %s -p tcp -m tcp --dport 8080 -m state --state NEW -j ACCEPT" % self.dev])
+                ["filter", "",
+                 "-A INPUT -i %s -p tcp -m tcp --dport 8080 "
+                 "-m state --state NEW -j ACCEPT" % self.dev])
             self.fw.append(
-                ["filter", "", "-A FORWARD -i %s -o eth1 -m state --state RELATED,ESTABLISHED -j ACCEPT" % self.dev])
+                ["filter", "",
+                 "-A FORWARD -i %s -o eth1 "
+                 "-m state --state RELATED,ESTABLISHED -j ACCEPT" % self.dev])
             self.fw.append(
-                ["filter", "", "-A FORWARD -i %s -o %s -m state --state NEW -j ACCEPT" % (self.dev, self.dev)])
+                ["filter", "",
+                 "-A FORWARD -i %s -o %s "
+                 "-m state --state NEW -j ACCEPT" % (self.dev, self.dev)])
             self.fw.append(
-                ["filter", "", "-A FORWARD -i eth2 -o eth0 -m state --state RELATED,ESTABLISHED -j ACCEPT"])
+                ["filter", "",
+                 "-A FORWARD -i eth2 -o eth0 "
+                 "-m state --state RELATED,ESTABLISHED -j ACCEPT"])
             self.fw.append(
-                ["filter", "", "-A FORWARD -i eth0 -o eth0 -m state --state RELATED,ESTABLISHED -j ACCEPT"])
+                ["filter", "",
+                 "-A FORWARD -i eth0 -o eth0 "
+                 "-m state --state RELATED,ESTABLISHED -j ACCEPT"])
             self.fw.append(
                 ["filter", "", "-A FORWARD -i eth0 -o eth2 -j FW_OUTBOUND"])
             self.fw.append(["mangle", "",
-                            "-A PREROUTING -i %s -m state --state NEW " % self.dev +
-                            "-j CONNMARK --set-xmark %s/0xffffffff" % self.dnum])
+                            "-A PREROUTING -i %s -m state --state NEW "
+                            "-j CONNMARK --set-xmark %s/0xffffffff" % (
+                                self.dev,
+                                self.dnum,
+                            )])
 
         self.fw.append(['', 'front', '-A FORWARD -j NETWORK_STATS'])
         self.fw.append(['', 'front', '-A INPUT -j NETWORK_STATS'])
@@ -462,14 +491,20 @@ class CsIP:
                 ["filter", "", "-A INPUT -i %s -p tcp -m tcp --dport 53 -j ACCEPT" % self.dev])
 
             self.fw.append(
-                ["filter", "", "-A INPUT -i %s -p tcp -m tcp --dport 80 -m state --state NEW -j ACCEPT" % self.dev])
+                ["filter", "",
+                 "-A INPUT -i %s -p tcp -m tcp --dport 80 "
+                 "-m state --state NEW -j ACCEPT" % self.dev])
             self.fw.append(
-                ["filter", "", "-A INPUT -i %s -p tcp -m tcp --dport 8080 -m state --state NEW -j ACCEPT" % self.dev])
+                ["filter", "",
+                 "-A INPUT -i %s -p tcp -m tcp --dport 8080 "
+                 "-m state --state NEW -j ACCEPT" % self.dev])
             self.fw.append([
                 "mangle", "",
-                "-A PREROUTING -m state --state NEW -i %s -s %s ! -d %s/32 -j ACL_OUTBOUND_%s" % (
+                "-A PREROUTING -m state --state NEW -i %s -s %s ! -d %s/32 "
+                "-j ACL_OUTBOUND_%s" % (
                     self.dev, self.address['network'],
-                    self.address['gateway'], self.dev
+                    self.address['gateway'],
+                    self.dev,
                 )
             ])
             self.fw.append([
@@ -518,7 +553,9 @@ class CsIP:
         self.fw.append(["filter", "", "-A INPUT -d 225.0.0.50/32 -j ACCEPT"])
 
         self.fw.append(["filter", "", "-A INPUT -p icmp -j ACCEPT"])
-        self.fw.append(["filter", "", "-A INPUT -i eth0 -p tcp -m tcp --dport 3922 -m state --state NEW,ESTABLISHED -j ACCEPT"])
+        self.fw.append(["filter", "",
+                        "-A INPUT -i eth0 -p tcp -m tcp --dport 3922 "
+                        "-m state --state NEW,ESTABLISHED -j ACCEPT"])
 
         self.fw.append(["filter", "", "-P INPUT DROP"])
         self.fw.append(["filter", "", "-P FORWARD DROP"])
@@ -575,7 +612,9 @@ class CsIP:
                 cidr = vals[1]
                 for ip, device in self.iplist.iteritems():
                     logging.info(
-                        "Iterating over the existing IPs. CIDR to be configured ==> %s, existing IP ==> %s on device ==> %s",
+                        "Iterating over the existing IPs. "
+                        "CIDR to be configured ==> %s, existing IP ==> %s "
+                        "on device ==> %s",
                         cidr, ip, device)
 
                     if cidr[0] != ip[0] and device != self.dev:
@@ -650,7 +689,9 @@ class CsIP:
             return False
 
         rip = ip.split('/')[0]
-        logging.info("Checking if cidr is a gateway for rVPC. IP ==> %s / device ==> %s", ip, self.dev)
+        logging.info(
+            "Checking if cidr is a gateway for rVPC. "
+            "IP ==> %s / device ==> %s", ip, self.dev)
 
         gw = interface.get_gateway()
         logging.info("Interface has the following gateway ==> %s", gw)

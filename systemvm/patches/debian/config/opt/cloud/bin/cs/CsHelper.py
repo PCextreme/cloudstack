@@ -29,8 +29,13 @@ from netaddr import IPNetwork
 
 PUBLIC_INTERFACES = {"router" : "eth2", "vpcrouter" : "eth1"}
 
-STATE_COMMANDS = {"router" : "ip addr | grep eth0 | grep inet | wc -l | xargs bash -c  'if [ $0 == 2 ]; then echo \"MASTER\"; else echo \"BACKUP\"; fi'",
-                  "vpcrouter" : "ip addr | grep eth1 | grep state | awk '{print $9;}' | xargs bash -c 'if [ $0 == \"UP\" ]; then echo \"MASTER\"; else echo \"BACKUP\"; fi'"}
+STATE_COMMANDS = {
+    "router": "ip addr | grep eth0 | grep inet | wc -l | xargs bash -c '"
+              "if [ $0 == 2 ]; then echo \"MASTER\"; else echo \"BACKUP\"; fi'",
+    "vpcrouter": "ip addr | grep eth1 | grep state | awk '{print $9;}' |"
+                 "xargs bash -c 'if [ $0 == \"UP\" ];"
+                 "then echo \"MASTER\"; else echo \"BACKUP\"; fi'",
+}
 
 def reconfigure_interfaces(router_config, interfaces):
     for interface in interfaces:
@@ -47,7 +52,8 @@ def reconfigure_interfaces(router_config, interfaces):
                     logging.info("Check state command => %s", state_cmd)
                     state = execute(state_cmd)[0]
                     logging.info("Route state => %s", state)
-                    if interface.get_device() != PUBLIC_INTERFACES[router_config.get_type()] and state == "MASTER":
+                    if interface.get_device() != PUBLIC_INTERFACES[router_config.get_type()] \
+                    and state == "MASTER":
                         execute(cmd)
                 else:
                     execute(cmd)
@@ -83,9 +89,12 @@ def rmdir(name):
 def mkdir(name, mode, fatal):
     try:
         os.makedirs(name, mode)
-    except OSError as e:
-        if e.errno != 17:
-            print "failed to make directories " + name + " due to :" + e.strerror
+    except OSError as error:
+        if error.errno != 17:
+            print "failed to make directories %s due to: %s" % (
+                name,
+                error.strerror,
+            )
             if fatal:
                 sys.exit(1)
 
@@ -183,8 +192,13 @@ def get_hostname():
 def execute(command):
     """ Execute command """
     logging.debug("Executing: %s", command)
-    p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-    result = p.communicate()[0]
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        shell=True,
+    )
+    result = process.communicate()[0]
     return result.splitlines()
 
 
@@ -193,20 +207,25 @@ def save_iptables(command, iptables_file):
     logging.debug("Saving iptables for %s", command)
 
     result = execute(command)
-    fIptables = open(iptables_file, "w+")
+    output = open(iptables_file, "w+")
 
     for line in result:
-        fIptables.write(line)
-        fIptables.write("\n")
-    fIptables.close()
+        output.write(line)
+        output.write("\n")
+    output.close()
 
 
 def execute2(command):
     """ Execute command """
     logging.debug("Executing: %s", command)
-    p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-    p.wait()
-    return p
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        shell=True,
+    )
+    process.wait()
+    return process
 
 
 def service(name, op):

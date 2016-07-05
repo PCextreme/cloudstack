@@ -37,8 +37,8 @@ class CsProcess(object):
 
     def kill_all(self):
         pids = self.find_pid()
-        for p in pids:
-            CsHelper.execute("kill -9 %s" % p)
+        for pid in pids:
+            CsHelper.execute("kill -9 %s" % pid)
 
     def find_pid(self):
         self.pid = []
@@ -49,7 +49,11 @@ class CsProcess(object):
             if matches == items:
                 self.pid.append(re.split(r"\s+", i)[1])
 
-        logging.debug("CsProcess:: Searching for process ==> %s and found PIDs ==> %s", self.search, self.pid)
+        logging.debug(
+            "CsProcess:: Searching for process ==> %s and found PIDs ==> %s",
+            self.search,
+            self.pid,
+        )
         return self.pid
 
     def find(self):

@@ -62,7 +62,7 @@ class CsDhcp(CsDataBag):
         self.cloud.commit()
 
         # We restart DNSMASQ every time the configure.py is called
-	# in order to avoid lease problems.
+        # in order to avoid lease problems.
         if not self.cl.is_redundant() or self.cl.is_master():
             CsHelper.service("dnsmasq", "restart")
 
@@ -75,7 +75,8 @@ class CsDhcp(CsDataBag):
             device = i['dev']
             ip = i['ip'].split('/')[0]
             sline = "dhcp-range=interface:%s,set:interface-%s-%s" % (device, device, idx)
-            line = "dhcp-range=interface:%s,set:interface-%s-%s,%s,static" % (device, device, idx, ip)
+            line = "dhcp-range=interface:%s,set:interface-%s-%s,%s,static" % (
+                device, device, idx, ip)
             self.conf.search(sline, line)
             gn = CsGuestNetwork(device, self.config)
             sline = "dhcp-option=tag:interface-%s-%s,15" % (device, idx)
@@ -122,7 +123,10 @@ class CsDhcp(CsDataBag):
         if self.config.is_vpc():
             self.add_host("127.0.0.1", CsHelper.get_hostname())
         if self.config.is_router():
-            self.add_host(self.config.address().get_guest_ip(), "%s data-server" % CsHelper.get_hostname())
+            self.add_host(
+                self.config.address().get_guest_ip(),
+                "%s data-server" % CsHelper.get_hostname()
+            )
 
     def write_hosts(self):
         cs_file = CsFile("/etc/hosts")
@@ -148,11 +152,11 @@ class CsDhcp(CsDataBag):
                                         ))
         i = IPAddress(entry['ipv4_adress'])
         # Calculate the device
-        for v in self.devinfo:
-            if i > v['network'].network and i < v['network'].broadcast:
-                v['dnsmasq'] = True
+        for dev in self.devinfo:
+            if i > dev['network'].network and i < dev['network'].broadcast:
+                dev['dnsmasq'] = True
                 # Virtual Router
-                v['gateway'] = entry['default_gateway']
+                dev['gateway'] = entry['default_gateway']
 
     def add_host(self, ip, hosts):
         self.hosts[ip] = hosts

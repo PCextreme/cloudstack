@@ -114,28 +114,28 @@ class CsNetfilters(object):
         return self.chain.has_chain(table, chain)
 
     def has_rule(self, new_rule):
-        for r in self.get():
-            if new_rule == r:
+        for rule in self.get():
+            if new_rule == rule:
                 if new_rule.get_count() > 0:
                     continue
-                r.mark_seen()
+                rule.mark_seen()
                 return True
         return False
 
     def get_unseen(self):
         del_list = [x for x in self.rules if x.unseen()]
-        for r in del_list:
-            cmd = "iptables -t %s %s" % (r.get_table(), r.to_str(True))
+        for rule in del_list:
+            cmd = "iptables -t %s %s" % (rule.get_table(), rule.to_str(True))
             logging.debug("unseen cmd:  %s ", cmd)
             CsHelper.execute(cmd)
-            logging.info("Delete rule %s from table %s", r.to_str(True), r.get_table())
+            logging.info("Delete rule %s from table %s", rule.to_str(True), rule.get_table())
 
     def compare(self, list):
         """ Compare reality with what is needed """
-        for c in self.chain.get("filter"):
+        for chain in self.chain.get("filter"):
             # Ensure all inbound/outbound chains have a default drop rule
-            if c.startswith("ACL_INBOUND") or c.startswith("ACL_OUTBOUND"):
-                list.append(["filter", "", "-A %s -j DROP" % c])
+            if chain.startswith("ACL_INBOUND") or chain.startswith("ACL_OUTBOUND"):
+                list.append(["filter", "", "-A %s -j DROP" % chain])
         # PASS 1:  Ensure all chains are present
         for fw in list:
             new_rule = CsNetfilter()
@@ -196,10 +196,10 @@ class CsNetfilters(object):
             return
 
     def del_rule(self, table, rule):
-        nr = CsNetfilter()
-        nr.parse(rule)
-        nr.set_table(table)
-        self.delete(nr)
+        net_rule = CsNetfilter()
+        net_rule.parse(rule)
+        net_rule.set_table(table)
+        self.delete(net_rule)
 
     def delete(self, rule):
         """ Delete a rule from the list of configured rules

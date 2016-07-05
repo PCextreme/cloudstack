@@ -89,23 +89,26 @@ class CsRedundant(object):
             self._redundant_off()
             return
 
-        interfaces = [interface for interface in self.address.get_interfaces() if interface.is_guest()]
-        isDeviceReady = False
+        interfaces = [
+            interface for interface in self.address.get_interfaces()
+            if interface.is_guest()
+        ]
+        device_ready = False
         dev = ''
         for interface in interfaces:
             if dev == interface.get_device():
                 continue
             dev = interface.get_device()
             logging.info("Wait for devices to be configured so we can start keepalived")
-            devConfigured = CsDevice(dev, self.config).waitfordevice()
-            if devConfigured:
+            dev_configured = CsDevice(dev, self.config).waitfordevice()
+            if dev_configured:
                 command = "ip link show %s | grep 'state UP'" % dev
-                devUp = CsHelper.execute(command)
-                if devUp:
+                dev_up = CsHelper.execute(command)
+                if dev_up:
                     logging.info("Device %s is present, let's start keepalive now.", dev)
-                    isDeviceReady = True
+                    device_ready = True
 
-        if not isDeviceReady:
+        if not device_ready:
             logging.info("Guest network not configured yet, let's stop router redundancy for now.")
             CsHelper.service("conntrackd", "stop")
             CsHelper.service("keepalived", "stop")
@@ -114,20 +117,26 @@ class CsRedundant(object):
         CsHelper.mkdir(self.CS_RAMDISK_DIR, 0755, False)
         CsHelper.mount_tmpfs(self.CS_RAMDISK_DIR)
         CsHelper.mkdir(self.CS_ROUTER_DIR, 0755, False)
-        for s in self.CS_TEMPLATES:
-            d = s
-            if s.endswith(".templ"):
-                d = s.replace(".templ", "")
+        for cs_template in self.CS_TEMPLATES:
+            d = cs_template
+            if cs_template.endswith(".templ"):
+                d = cs_template.replace(".templ", "")
             CsHelper.copy_if_needed(
-                "%s/%s" % (self.CS_TEMPLATES_DIR, s), "%s/%s" % (self.CS_ROUTER_DIR, d))
+                "%s/%s" % (self.CS_TEMPLATES_DIR, cs_template), "%s/%s" % (self.CS_ROUTER_DIR, d))
 
         CsHelper.copy_if_needed(
-            "%s/%s" % (self.CS_TEMPLATES_DIR, "keepalived.conf.templ"), self.KEEPALIVED_CONF)
+            "%s/%s" % (self.CS_TEMPLATES_DIR, "keepalived.conf.templ"),
+            self.KEEPALIVED_CONF
+        )
         CsHelper.copy_if_needed(
-            "%s/%s" % (self.CS_TEMPLATES_DIR, "checkrouter.sh.templ"), "/opt/cloud/bin/checkrouter.sh")
+            "%s/%s" % (self.CS_TEMPLATES_DIR, "checkrouter.sh.templ"),
+            "/opt/cloud/bin/checkrouter.sh"
+        )
 
         CsHelper.execute(
-            r'sed -i "s/--exec\ \$DAEMON;/--exec\ \$DAEMON\ --\ --vrrp;/g" /etc/init.d/keepalived')
+            r'sed -i "s/--exec\ \$DAEMON;/--exec\ \$DAEMON\ --\ --vrrp;/g" '
+            r'/etc/init.d/keepalived'
+        )
         # checkrouter.sh configuration
         check_router = CsFile("/opt/cloud/bin/checkrouter.sh")
         check_router.greplace("[RROUTER_LOG]", self.RROUTER_LOG)
@@ -216,13 +225,14 @@ class CsRedundant(object):
 
         for _ in range(0, iterations):
             try:
-                s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                s.bind('/tmp/master_lock')
-                return s
-            except socket.error, e:
-                error_code = e.args[0]
-                error_string = e.args[1]
-                print "Process already running (%d:%s). Exiting" % (error_code, error_string)
+                sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                sock.bind('/tmp/master_lock')
+                return sock
+            except socket.error, error:
+                print "Process already running (%d:%s). Exiting" % (
+                    error.args[0],
+                    error.args[1],
+                )
                 logging.info("Master is already running, waiting")
                 sleep(time_between)
 
@@ -235,7 +245,10 @@ class CsRedundant(object):
         self.set_lock()
         logging.info("Router switched to fault mode")
 
-        interfaces = [interface for interface in self.address.get_interfaces() if interface.is_public()]
+        interfaces = [
+            interface for interface in self.address.get_interfaces()
+            if interface.is_public()
+        ]
         for interface in interfaces:
             CsHelper.execute("ifconfig %s down" % interface.get_device())
 
@@ -245,7 +258,10 @@ class CsRedundant(object):
         CsHelper.service("xl2tpd", "stop")
         CsHelper.service("dnsmasq", "stop")
 
-        interfaces = [interface for interface in self.address.get_interfaces() if interface.needs_vrrp()]
+        interfaces = [
+            interface for interface in self.address.get_interfaces()
+            if interface.needs_vrrp()
+        ]
         for interface in interfaces:
             CsPasswdSvc(interface.get_gateway()).stop()
 
@@ -254,7 +270,10 @@ class CsRedundant(object):
         self.release_lock()
         logging.info("Router switched to fault mode")
 
-        interfaces = [interface for interface in self.address.get_interfaces() if interface.is_public()]
+        interfaces = [
+            interface for interface in self.address.get_interfaces()
+            if interface.is_public()
+        ]
         CsHelper.reconfigure_interfaces(self.cl, interfaces)
 
     def set_backup(self):
@@ -267,7 +286,10 @@ class CsRedundant(object):
         logging.debug("Setting router to backup")
 
         dev = ''
-        interfaces = [interface for interface in self.address.get_interfaces() if interface.is_public()]
+        interfaces = [
+            interface for interface in self.address.get_interfaces()
+            if interface.is_public()
+        ]
         for interface in interfaces:
             if dev == interface.get_device():
                 continue
@@ -281,7 +303,10 @@ class CsRedundant(object):
         CsHelper.service("ipsec", "stop")
         CsHelper.service("xl2tpd", "stop")
 
-        interfaces = [interface for interface in self.address.get_interfaces() if interface.needs_vrrp()]
+        interfaces = [
+            interface for interface in self.address.get_interfaces()
+            if interface.needs_vrrp()
+        ]
         for interface in interfaces:
             CsPasswdSvc(interface.get_gateway()).stop()
         CsHelper.service("dnsmasq", "stop")
@@ -290,7 +315,10 @@ class CsRedundant(object):
         self.cl.save()
         self.release_lock()
 
-        interfaces = [interface for interface in self.address.get_interfaces() if interface.is_public()]
+        interfaces = [
+            interface for interface in self.address.get_interfaces()
+            if interface.is_public()
+        ]
         CsHelper.reconfigure_interfaces(self.cl, interfaces)
         logging.info("Router switched to backup mode")
 
@@ -304,7 +332,10 @@ class CsRedundant(object):
         logging.debug("Setting router to master")
 
         dev = ''
-        interfaces = [interface for interface in self.address.get_interfaces() if interface.is_public()]
+        interfaces = [
+            interface for interface in self.address.get_interfaces()
+            if interface.is_public()
+        ]
         route = CsRoute()
         for interface in interfaces:
             if dev == interface.get_device():
@@ -337,7 +368,10 @@ class CsRedundant(object):
         CsHelper.execute("%s -B" % cmd)
         CsHelper.service("ipsec", "restart")
         CsHelper.service("xl2tpd", "restart")
-        interfaces = [interface for interface in self.address.get_interfaces() if interface.needs_vrrp()]
+        interfaces = [
+            interface for interface in self.address.get_interfaces()
+            if interface.needs_vrrp()
+        ]
         for interface in interfaces:
             CsPasswdSvc(interface.get_gateway()).restart()
 
@@ -346,7 +380,10 @@ class CsRedundant(object):
         self.cl.save()
         self.release_lock()
 
-        interfaces = [interface for interface in self.address.get_interfaces() if interface.is_public()]
+        interfaces = [
+            interface for interface in self.address.get_interfaces()
+            if interface.is_public()
+        ]
         CsHelper.reconfigure_interfaces(self.cl, interfaces)
         logging.info("Router switched to master mode")
 
@@ -365,12 +402,14 @@ class CsRedundant(object):
     def _collect_ips(self):
         """
         Construct a list containing all the ips that need to be looked afer by vrrp
-        This is based upon the address_needs_vrrp method in CsAddress which looks at
-        the network type and decides if it is an internal address or an external one
+        This is based upon the address_needs_vrrp method in CsAddress which
+        looks at the network type and decides if it is an internal address
+        or an external one.
 
-        In a DomR there will only ever be one address in a VPC there can be many
-        The new code also gives the possibility to cloudstack to have a hybrid device
-        that could function as a router and VPC router at the same time
+        In a DomR there will only ever be one address in a VPC there can be
+        many.
+        The new code also gives the possibility to cloudstack to have a hybrid
+        device that could function as a router and VPC router at the same time.
         """
         lines = []
         for interface in self.address.get_interfaces():
@@ -379,7 +418,19 @@ class CsRedundant(object):
                 if not interface.is_added():
                     continue
                 if cmdline.get_type() == 'router':
-                    lines += ["        %s brd %s dev %s\n" % (cmdline.get_guest_gw(), interface.get_broadcast(), interface.get_device())]
+                    lines += [
+                        "        %s brd %s dev %s\n" % (
+                            cmdline.get_guest_gw(),
+                            interface.get_broadcast(),
+                            interface.get_device(),
+                        )
+                    ]
                 else:
-                    lines += ["        %s brd %s dev %s\n" % (interface.get_gateway_cidr(), interface.get_broadcast(), interface.get_device())]
+                    lines += [
+                        "        %s brd %s dev %s\n" % (
+                            interface.get_gateway_cidr(),
+                            interface.get_broadcast(),
+                            interface.get_device(),
+                        )
+                    ]
         return lines

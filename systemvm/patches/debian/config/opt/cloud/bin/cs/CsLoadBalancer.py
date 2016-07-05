@@ -36,9 +36,9 @@ class CsLoadBalancer(CsDataBag):
         config = self.dbag['config'][0]['configuration']
         file1 = CsFile(HAPROXY_CONF_T)
         file1.empty()
-        for x in config:
-            for w in x.split('\n'):
-                file1.append(w, -1)
+        for data in config:
+            for item in data.split('\n'):
+                file1.append(item, -1)
 
         file1.commit()
         file2 = CsFile(HAPROXY_CONF_P)
@@ -69,16 +69,25 @@ class CsLoadBalancer(CsDataBag):
             path = rules.split(':')
             ip = path[0]
             port = path[1]
-            firewall.append(["filter", "", "-A INPUT -p tcp -m tcp -d %s --dport %s -m state --state NEW -j ACCEPT" % (ip, port)])
+            firewall.append(
+                ["filter", "",
+                 "-A INPUT -p tcp -m tcp -d %s --dport %s "
+                 "-m state --state NEW -j ACCEPT" % (ip, port)])
 
         for rules in remove_rules:
             path = rules.split(':')
             ip = path[0]
             port = path[1]
-            firewall.append(["filter", "", "-D INPUT -p tcp -m tcp -d %s --dport %s -m state --state NEW -j ACCEPT" % (ip, port)])
+            firewall.append(
+                ["filter", "",
+                 "-D INPUT -p tcp -m tcp -d %s --dport %s "
+                 "-m state --state NEW -j ACCEPT" % (ip, port)])
 
         for rules in stat_rules:
             path = rules.split(':')
             ip = path[0]
             port = path[1]
-            firewall.append(["filter", "", "-A INPUT -p tcp -m tcp -d %s --dport %s -m state --state NEW -j ACCEPT" % (ip, port)])
+            firewall.append(
+                ["filter", "",
+                 "-A INPUT -p tcp -m tcp -d %s --dport %s "
+                 "-m state --state NEW -j ACCEPT" % (ip, port)])

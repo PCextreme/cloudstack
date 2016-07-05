@@ -49,19 +49,26 @@ class CsApache(CsApp):
         cs_file.search("Listen .*:80", "Listen %s:80" % (self.ip))
         cs_file.search("Listen .*:443", "Listen %s:443" % (self.ip))
         cs_file.search("NameVirtualHost .*:80", "NameVirtualHost %s:80" % (self.ip))
-        cs_file.search("ServerName.*", "\tServerName %s.%s" % (self.config.cl.get_type(), self.config.get_domain()))
+        cs_file.search(
+            "ServerName.*",
+            "\tServerName %s.%s" % (
+                self.config.cl.get_type(), self.config.get_domain()
+            )
+        )
         if cs_file.is_changed():
             cs_file.commit()
             CsHelper.service("apache2", "restart")
 
         self.fw.append([
             "", "front",
-            "-A INPUT -i %s -d %s/32 -p tcp -m tcp -m state --state NEW --dport 80 -j ACCEPT" % (self.dev, self.ip)
+            "-A INPUT -i %s -d %s/32 -p tcp -m tcp -m state --state NEW "
+            "--dport 80 -j ACCEPT" % (self.dev, self.ip)
         ])
 
         self.fw.append([
             "", "front",
-            "-A INPUT -i %s -d %s/32 -p tcp -m tcp -m state --state NEW --dport 443 -j ACCEPT" % (self.dev, self.ip)
+            "-A INPUT -i %s -d %s/32 -p tcp -m tcp -m state --state NEW "
+            "--dport 443 -j ACCEPT" % (self.dev, self.ip)
         ])
 
 
@@ -108,5 +115,8 @@ class CsDnsmasq(CsApp):
 
             self.fw.append([
                 "", "front",
-                "-A INPUT -i %s -d %s/32 -p tcp -m tcp --dport 53 -j ACCEPT" % (self.dev, self.ip)
+                "-A INPUT -i %s -d %s/32 -p tcp -m tcp --dport 53 -j ACCEPT" % (
+                    self.dev,
+                    self.ip,
+                )
             ])
