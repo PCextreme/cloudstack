@@ -939,6 +939,31 @@ public class LibvirtStorageAdaptor implements StorageAdaptor {
         return disk;
     }
 
+    private KVMPhysicalDisk clonePhysicalDisk(KVMPhysicalDisk template, String name) {
+        s_logger.info("Cloning disk " + template.getName() + " to " + name + " using libvirt");
+        KVMStoragePool srcPool = template.getPool();
+        PhysicalDiskFormat format = template.getFormat();
+        KVMPhysicalDisk disk = null;
+        LibvirtStorageVolumeDef volDef = new LibvirtStorageVolumeDef(name, null,
+                LibvirtStorageVolumeDef.VolumeFormat.getFormat(format), null, null);
+
+        s_logger.debug(volDef.toString());
+
+        try {
+            LibvirtStoragePool pool = (LibvirtStoragePool) srcPool;
+            StorageVol vol = getVolume(pool.getPool(), template.getName());
+            StorageVol newVol = pool.getPool().storageVolCreateXMLFrom(volDef.toString(), vol, 0);
+            disk = new KVMPhysicalDisk(newVol.getPath(), newVol.getName(), srcPool);
+            disk.setFormat(template.getFormat());
+            disk.setSize(template.getSize());
+            disk.setVirtualSize(template.getVirtualSize());
+        } catch (LibvirtException e) {
+            throw new CloudRuntimeException("Failed to clone disk " + template.getName() + " to " + name +
+                    " due to: " + e.getMessage());
+        }
+        return disk;
+    }
+
     private KVMPhysicalDisk createDiskFromTemplateOnRBD(KVMPhysicalDisk template,
             String name, PhysicalDiskFormat format, Storage.ProvisioningType provisioningType, long size, KVMStoragePool destPool, int timeout){
 
@@ -1007,16 +1032,27 @@ public class LibvirtStorageAdaptor implements StorageAdaptor {
                     r.connect();
                     s_logger.debug("Succesfully connected to Ceph cluster at " + r.confGet("mon_host"));
 
+                    /*
+                        We have to figure out if the image is format 1 since we can't clone it and thus need to copy
+                        If it is format 2 we can ask libvirt to perform the clone for us
+                    */
                     IoCTX io = r.ioCtxCreate(srcPool.getSourceDir());
                     Rbd rbd = new Rbd(io);
                     RbdImage srcImage = rbd.open(template.getName());
+                    boolean isOldFormat = srcImage.isOldFormat();
+                    rbd.close(srcImage);
+                    r.ioCtxDestroy(io);
 
-                    if (srcImage.isOldFormat()) {
+                    if (isOldFormat) {
                         /* The source image is RBD format 1, we have to do a regular copy */
                         s_logger.debug("The source image " + srcPool.getSourceDir() + "/" + template.getName() +
                                 " is RBD format 1. We have to perform a regular copy (" + disk.getVirtualSize() + " bytes)");
 
+                        io = r.ioCtxCreate(srcPool.getSourceDir());
+                        rbd = new Rbd(io);
                         rbd.create(disk.getName(), disk.getVirtualSize(), rbdFeatures, rbdOrder);
+                        srcImage = rbd.open(template.getName());
+
                         RbdImage destImage = rbd.open(disk.getName());
 
                         s_logger.debug("Starting to copy " + srcImage.getName() +  " to " + destImage.getName() + " in Ceph pool " + srcPool.getSourceDir());
@@ -1024,49 +1060,63 @@ public class LibvirtStorageAdaptor implements StorageAdaptor {
 
                         s_logger.debug("Finished copying " + srcImage.getName() +  " to " + destImage.getName() + " in Ceph pool " + srcPool.getSourceDir());
                         rbd.close(destImage);
+                        rbd.close(srcImage);
+                        r.ioCtxDestroy(io);
                     } else {
-                        s_logger.debug("The source image " + srcPool.getSourceDir() + "/" + template.getName()
-                                + " is RBD format 2. We will perform a RBD clone using snapshot "
-                                + rbdTemplateSnapName);
-                        /* The source image is format 2, we can do a RBD snapshot+clone (layering) */
+                        /*
+                            Starting from libvirt 2.0.0 the RBD storage pool driver inside libvirt supports cloning RBD
+                            images instead of us doing this manually using rados-java
 
+                            Not all Linux distributions ship this libvirt version yet, so we need to check the libvirt
+                            version and then decide which route to take
+                         */
+                        LibvirtStoragePool pool = (LibvirtStoragePool) srcPool;
+                        if (pool.getPool().getConnect().getLibVirVersion() >= 20000) {
+                            s_logger.debug("The source image " + srcPool.getSourceDir() + "/" + template.getName()
+                                    + " is RBD format 2. We will perform a RBD clone using libvirt");
+                            disk = clonePhysicalDisk(template, name);
+                        } else {
+                            s_logger.debug("The source image " + srcPool.getSourceDir() + "/" + template.getName()
+                                    + " is RBD format 2. We will perform a RBD clone using snapshot "
+                                    + rbdTemplateSnapName);
 
-                        s_logger.debug("Checking if RBD snapshot " + srcPool.getSourceDir() + "/" + template.getName()
-                                + "@" + rbdTemplateSnapName + " exists prior to attempting a clone operation.");
+                            srcImage = rbd.open(template.getName());
 
-                        List<RbdSnapInfo> snaps = srcImage.snapList();
-                        s_logger.debug("Found " + snaps.size() +  " snapshots on RBD image " + srcPool.getSourceDir() + "/" + template.getName());
-                        boolean snapFound = false;
-                        for (RbdSnapInfo snap : snaps) {
-                            if (rbdTemplateSnapName.equals(snap.name)) {
-                                s_logger.debug("RBD snapshot " + srcPool.getSourceDir() + "/" + template.getName()
-                                        + "@" + rbdTemplateSnapName + " already exists.");
-                                snapFound = true;
-                                break;
+                            s_logger.debug("Checking if RBD snapshot " + srcPool.getSourceDir() + "/" + template.getName()
+                                    + "@" + rbdTemplateSnapName + " exists prior to attempting a clone operation.");
+
+                            List<RbdSnapInfo> snaps = srcImage.snapList();
+                            s_logger.debug("Found " + snaps.size() +  " snapshots on RBD image " + srcPool.getSourceDir() + "/" + template.getName());
+                            boolean snapFound = false;
+                            for (RbdSnapInfo snap : snaps) {
+                                if (rbdTemplateSnapName.equals(snap.name)) {
+                                    s_logger.debug("RBD snapshot " + srcPool.getSourceDir() + "/" + template.getName()
+                                            + "@" + rbdTemplateSnapName + " already exists.");
+                                    snapFound = true;
+                                    break;
+                                }
                             }
-                        }
 
-                        if (!snapFound) {
-                            s_logger.debug("Creating RBD snapshot " + rbdTemplateSnapName + " on image " + name);
-                            srcImage.snapCreate(rbdTemplateSnapName);
-                            s_logger.debug("Protecting RBD snapshot " + rbdTemplateSnapName + " on image " + name);
-                            srcImage.snapProtect(rbdTemplateSnapName);
-                        }
+                            if (!snapFound) {
+                                s_logger.debug("Creating RBD snapshot " + rbdTemplateSnapName + " on image " + name);
+                                srcImage.snapCreate(rbdTemplateSnapName);
+                                s_logger.debug("Protecting RBD snapshot " + rbdTemplateSnapName + " on image " + name);
+                                srcImage.snapProtect(rbdTemplateSnapName);
+                            }
 
-                        rbd.clone(template.getName(), rbdTemplateSnapName, io, disk.getName(), rbdFeatures, rbdOrder);
-                        s_logger.debug("Succesfully cloned " + template.getName() + "@" + rbdTemplateSnapName + " to " + disk.getName());
-                        /* We also need to resize the image if the VM was deployed with a larger root disk size */
-                        if (disk.getVirtualSize() > template.getVirtualSize()) {
-                            RbdImage diskImage = rbd.open(disk.getName());
-                            diskImage.resize(disk.getVirtualSize());
-                            rbd.close(diskImage);
-                            s_logger.debug("Resized " + disk.getName() + " to " + disk.getVirtualSize());
-                        }
+                            rbd.clone(template.getName(), rbdTemplateSnapName, io, disk.getName(), rbdFeatures, rbdOrder);
+                            s_logger.debug("Succesfully cloned " + template.getName() + "@" + rbdTemplateSnapName + " to " + disk.getName());
+                            /* We also need to resize the image if the VM was deployed with a larger root disk size */
+                            if (disk.getVirtualSize() > template.getVirtualSize()) {
+                                RbdImage diskImage = rbd.open(disk.getName());
+                                diskImage.resize(disk.getVirtualSize());
+                                rbd.close(diskImage);
+                                s_logger.debug("Resized " + disk.getName() + " to " + disk.getVirtualSize());
+                            }
 
+                            rbd.close(srcImage);
+                        }
                     }
-
-                    rbd.close(srcImage);
-                    r.ioCtxDestroy(io);
                 } else {
                     /* The source pool or host is not the same Ceph cluster, we do a simple copy with Qemu-Img */
                     s_logger.debug("Both the source and destination are RBD, but not the same Ceph cluster. Performing a copy");
@@ -1113,6 +1163,9 @@ public class LibvirtStorageAdaptor implements StorageAdaptor {
                 disk = null;
             } catch (RbdException e) {
                 s_logger.error("Failed to perform a RBD action on the Ceph cluster, the error was: " + e.getMessage());
+                disk = null;
+            } catch (LibvirtException e) {
+                s_logger.error("Failed to perform a libvirt action on the Ceph cluster, the error was: " + e.getMessage());
                 disk = null;
             }
         }
