@@ -181,13 +181,18 @@ def get_hostname():
 
 def execute(command):
     """ Execute command """
-    p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-    p.wait()
-    rc = p.returncode
-
-    logging.debug("Executed: %s - exitstatus=%s " % (command, rc))
-    result = p.communicate()[0]
-    return result.splitlines()
+    returncode = -1
+    try:
+        logging.info("Executing: %s" % command)
+        result = subprocess.check_output(command, shell=True)
+        returncode = 0
+        return result.splitlines()
+    except subprocess.CalledProcessError as e:
+        logging.error(e)
+        returncode = e.returncode
+    finally:
+        logging.debug("Executed: %s - exitstatus=%s " % (command, returncode))
+    return list()
 
 
 def save_iptables(command, iptables_file):
