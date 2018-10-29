@@ -143,6 +143,7 @@ public class KVMStoragePoolManager {
                 result = true;
                 continue;
             }
+
             VolumeObjectTO vol = (VolumeObjectTO)disk.getData();
             PrimaryDataStoreTO store = (PrimaryDataStoreTO)vol.getDataStore();
             if (!store.isManaged() && VirtualMachine.State.Migrating.equals(vmSpec.getState())) {

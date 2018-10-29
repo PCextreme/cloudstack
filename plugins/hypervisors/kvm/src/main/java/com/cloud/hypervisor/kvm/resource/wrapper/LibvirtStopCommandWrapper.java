@@ -91,7 +91,7 @@ public final class LibvirtStopCommandWrapper extends CommandWrapper<StopCommand,
             if (result == null) {
                 if (disks != null && disks.size() > 0) {
                     for (final DiskDef disk : disks) {
-                        libvirtComputingResource.cleanupDisk(disk);
+                        libvirtComputingResource.disconnectDisk(disk);
                     }
                 }
                 else {

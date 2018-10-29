@@ -206,16 +206,7 @@ public final class LibvirtMigrateCommandWrapper extends CommandWrapper<MigrateCo
 
             destDomain = migrateThread.get(10, TimeUnit.SECONDS);
 
-            if (destDomain != null) {
-                for (DiskDef disk : disks) {
-                    MigrateDiskInfo migrateDiskInfo = searchDiskDefOnMigrateDiskInfoList(migrateDiskInfoList, disk);
-                    if (migrateDiskInfo != null && migrateDiskInfo.isSourceDiskOnLocalStorage()) {
-                        deleteLocalVolume(disk.getDiskPath());
-                    } else {
-                        libvirtComputingResource.cleanupDisk(disk);
-                    }
-                }
-            }
+            disconnectSharedAndDeleteLocalDisks(libvirtComputingResource, migrateDiskInfoList, disks, destDomain);
 
         } catch (final LibvirtException e) {
             s_logger.debug("Can't migrate domain: " + e.getMessage());
@@ -286,6 +277,23 @@ public final class LibvirtMigrateCommandWrapper extends CommandWrapper<MigrateCo
         }
 
         return new MigrateAnswer(command, result == null, result, null);
+    }
+
+    /**
+     * Disconnects shared disks and delete local disks from the source host in the VM volume migration process.
+     */
+    private void disconnectSharedAndDeleteLocalDisks(final LibvirtComputingResource libvirtComputingResource, final List<MigrateDiskInfo> migrateDiskInfoList,
+            List<DiskDef> disks, Domain destDomain) {
+        if (destDomain != null) {
+            for (DiskDef disk : disks) {
+                MigrateDiskInfo migrateDiskInfo = searchDiskDefOnMigrateDiskInfoList(migrateDiskInfoList, disk);
+                if (migrateDiskInfo != null && migrateDiskInfo.isSourceDiskOnLocalStorage()) {
+                    deleteLocalVolume(disk.getDiskPath());
+                } else {
+                    libvirtComputingResource.disconnectDisk(disk);
+                }
+            }
+        }
     }
 
     /**

@@ -36,5 +36,8 @@ INSERT INTO `cloud`.`role_permissions` (`uuid`, `role_id`, `rule`, `permission`,
 
 UPDATE `cloud`.`async_job` SET `removed` = now() WHERE `removed` IS NULL;
 
+-- PR#1448 update description of 'execute.in.sequence.network.element.commands' parameter to reflect an unused command that has been removed. The removed class command is 'UserDataCommand'.
+update `cloud`.`configuration` set description = 'If set to true, DhcpEntryCommand, SavePasswordCommand, VmDataCommand will be synchronized on the agent side. If set to false, these commands become asynchronous. Default value is false.' where name = 'execute.in.sequence.network.element.commands';
+ 
 -- Allow KVM VM live migration with ROOT volume on local storage
 UPDATE `cloud`.`hypervisor_capabilities` SET `storage_motion_supported` = 1 WHERE `hypervisor_capabilities`.`hypervisor_type` = 'KVM';

@@ -1701,23 +1701,14 @@ public class StorageSystemDataMotionStrategy implements DataMotionStrategy {
                 VolumeVO destVolume = duplicateVolumeOnAnotherStorage(srcVolume, destStoragePool);
                 VolumeInfo destVolumeInfo = _volumeDataFactory.getVolume(destVolume.getId(), destDataStore);
 
-                // move the volume from Allocated to Creating
-                destVolumeInfo.processEvent(Event.MigrationCopyRequested);
-                // move the volume from Creating to Ready
-                destVolumeInfo.processEvent(Event.MigrationCopySucceeded);
-                // move the volume from Ready to Migrating
-                destVolumeInfo.processEvent(Event.MigrationRequested);
+                moveVolumeToMigratingState(destVolumeInfo);
 
                 // create a volume on the destination storage
                 destDataStore.getDriver().createAsync(destDataStore, destVolumeInfo, null);
 
                 destVolume = _volumeDao.findById(destVolume.getId());
 
-                if (StringUtils.isNotEmpty(destVolume.get_iScsiName())) {
-                    destVolume.setPath(destVolume.get_iScsiName());
-                } else {
-                    destVolume.setPath(destVolume.getUuid());
-                }
+                setVolumePath(destVolume);
 
                 _volumeDao.update(destVolume.getId(), destVolume);
 
@@ -1735,30 +1726,14 @@ public class StorageSystemDataMotionStrategy implements DataMotionStrategy {
 
                     migrateStorage.put(srcVolumeInfo.getPath(), migrateDiskInfo);
 
-                    migrateDiskInfo.setSourceDiskOnLocalStorage(sourceStoragePool.isLocal());
-                    migrateDiskInfoList.add(migrateDiskInfo);
+                    setDiskOnLocalStorageAndAddDiskInfo(migrateDiskInfoList, sourceStoragePool, migrateDiskInfo);
 
                     srcVolumeInfoToDestVolumeInfo.put(srcVolumeInfo, destVolumeInfo);
                 } else if (destStoragePool.isLocal()) {
-                    DiskOfferingVO diskOffering = _diskOfferingDao.findById(srcVolume.getDiskOfferingId());
-                    DiskProfile diskProfile = new DiskProfile(destVolume, diskOffering, HypervisorType.KVM);
+                    String libvirtDestinyImagesPath = generateLibvirtDestinyImagesPath(vmTO, srcVolume, destHost, destStoragePool, destVolumeInfo);
 
-                    String templateUuid = getTemplateUuid(destVolume);
-                    CreateCommand rootImageProvisioningCommand = new CreateCommand(diskProfile, templateUuid, destStoragePool, true);
+                    configureDiskInfoToBeMigratedToLocalStorage(migrateStorage, srcVolumeInfo, sourceStoragePool, destStoragePool, destVolumeInfo, libvirtDestinyImagesPath, migrateDiskInfoList);
 
-                    Answer rootImageProvisioningAnswer = _agentMgr.easySend(destHost.getId(), rootImageProvisioningCommand);
-
-                    if (rootImageProvisioningAnswer == null) {
-                        throw new CloudRuntimeException(String.format("Migration with storage of vm [%s] failed while provisioning root image", vmTO.getName()));
-                    }
-
-                    if (!rootImageProvisioningAnswer.getResult()) {
-                        throw new CloudRuntimeException(String.format("Unable to modify target volume on the host [host id:%s, name:%s]", destHost.getId(), destHost.getName()));
-                    }
-
-                    String libvirtDestinyImagesPath = generateLibirtDestinyImagesPath(destVolumeInfo, rootImageProvisioningAnswer);
-                    configureDiskInfoToBeMigratedToLocalStorage(migrateStorage, srcVolumeInfo, sourceStoragePool, destStoragePool, destVolume, destVolumeInfo, libvirtDestinyImagesPath,
-                            migrateDiskInfoList);
                     srcVolumeInfoToDestVolumeInfo.put(srcVolumeInfo, destVolumeInfo);
                 }
             }
@@ -1827,27 +1802,75 @@ public class StorageSystemDataMotionStrategy implements DataMotionStrategy {
     }
 
     /**
+     * Sets the volume path as the iScsi name in case of a configured iScsi; otherwise, set the volume path with its UUID.
+     */
+    private void setVolumePath(VolumeVO volume) {
+        if (StringUtils.isNotEmpty(volume.get_iScsiName())) {
+            volume.setPath(volume.get_iScsiName());
+        } else {
+            volume.setPath(volume.getUuid());
+        }
+    }
+
+    /**
+     *  Marks the {@link MigrateDiskInfo} 'isSourceDiskOnLocalStorage' flag to true and adds the {@link MigrateDiskInfo} object into the given {@link List}.
+     */
+    private void setDiskOnLocalStorageAndAddDiskInfo(List<MigrateDiskInfo> migrateDiskInfoList, StoragePoolVO sourceStoragePool, MigrateCommand.MigrateDiskInfo migrateDiskInfo) {
+        migrateDiskInfo.setSourceDiskOnLocalStorage(sourceStoragePool.isLocal());
+        migrateDiskInfoList.add(migrateDiskInfo);
+    }
+
+    /**
+     * Moves the volume to Migrating state.</br>
+     * <ul>
+     *  <li>move the volume from Allocated to Creating;</li>
+     *  <li>move the volume from Creating to Ready; and</li>
+     *  <li>move the volume from Ready to Migrating.</li>
+     * </ul>
+     */
+    private void moveVolumeToMigratingState(VolumeInfo volumeToBeMigrated) {
+        volumeToBeMigrated.processEvent(Event.MigrationCopyRequested);
+        volumeToBeMigrated.processEvent(Event.MigrationCopySucceeded);
+        volumeToBeMigrated.processEvent(Event.MigrationRequested);
+    }
+
+    /**
+     * Generates the volume path by appending the Volume UUID to the Libvirt destiny images path. </br>
+     * Example: /var/lib/libvirt/images/f3d49ecc-870c-475a-89fa-fd0124420a9b
+     */
+    private String generateLibvirtDestinyImagesPath(VirtualMachineTO vmTO, VolumeVO srcVolume, Host destHost, StoragePoolVO destStoragePool, VolumeInfo destVolumeInfo) {
+        DiskOfferingVO diskOffering = _diskOfferingDao.findById(srcVolume.getDiskOfferingId());
+        DiskProfile diskProfile = new DiskProfile(destVolumeInfo, diskOffering, HypervisorType.KVM);
+        String templateUuid = getTemplateUuid(destVolumeInfo);
+        CreateCommand rootImageProvisioningCommand = new CreateCommand(diskProfile, templateUuid, destStoragePool, true);
+
+        Answer rootImageProvisioningAnswer = _agentMgr.easySend(destHost.getId(), rootImageProvisioningCommand);
+
+        if (rootImageProvisioningAnswer == null) {
+            throw new CloudRuntimeException(String.format("Migration with storage of vm [%s] failed while provisioning root image", vmTO.getName()));
+        }
+
+        if (!rootImageProvisioningAnswer.getResult()) {
+            throw new CloudRuntimeException(String.format("Unable to modify target volume on the host [host id:%s, name:%s]", destHost.getId(), destHost.getName()));
+        }
+
+        String libvirtDestImgsPath = StringUtils.EMPTY;
+        if (rootImageProvisioningAnswer instanceof CreateAnswer) {
+            libvirtDestImgsPath = ((CreateAnswer)rootImageProvisioningAnswer).getVolume().getName() + "/";
+        }
+        return libvirtDestImgsPath + destVolumeInfo.getUuid();
+    }
+
+    /**
      * Returns the template Uuid of the given {@link VolumeVO}.
      */
-    private String getTemplateUuid(VolumeVO destVolume) {
+    private String getTemplateUuid(VolumeInfo destVolume) {
         Long templateId = destVolume.getTemplateId();
         if (templateId == null) {
             return null;
         }
         TemplateInfo templateImage = tmplFactory.getTemplate(templateId, DataStoreRole.Image);
         return templateImage.getUuid();
-    }
-
-    /**
-     * Generates the volume path by appending the Volume Uuid to the Libvirt destiny images path. </br>
-     * Example: /var/lib/libvirt/images/f3d49ecc-870c-475a-89fa-fd0124420a9b
-     */
-    private String generateLibirtDestinyImagesPath(VolumeInfo destVolumeInfo, Answer rootImageProvisioningAnswer) {
-        String libvirtDestImgsPath = StringUtils.EMPTY;
-        if (rootImageProvisioningAnswer instanceof CreateAnswer) {
-            libvirtDestImgsPath = ((CreateAnswer)rootImageProvisioningAnswer).getVolume().getName() + "/";
-        }
-        return libvirtDestImgsPath + destVolumeInfo.getUuid();
     }
 
     /**
@@ -1858,8 +1881,8 @@ public class StorageSystemDataMotionStrategy implements DataMotionStrategy {
      * and the disk source as {@link MigrateDiskInfo.Source.FILE}.
      */
     private void configureDiskInfoToBeMigratedToLocalStorage(Map<String, MigrateDiskInfo> migrateStorage, VolumeInfo srcVolumeInfo, StoragePoolVO sourceStoragePool,
-            StoragePoolVO destStoragePool, VolumeVO destVolume, VolumeInfo destVolumeInfo, String libvirtDestImgPath, List<MigrateDiskInfo> migrateDiskInfoList) {
-        MigrateDiskInfo.DriverType driverType = MigrateDiskInfo.DriverType.valueOf(destVolume.getFormat().toString());
+            StoragePoolVO destStoragePool, VolumeInfo destVolumeInfo, String libvirtDestImgPath, List<MigrateDiskInfo> migrateDiskInfoList) {
+        MigrateDiskInfo.DriverType driverType = MigrateDiskInfo.DriverType.valueOf(destVolumeInfo.getFormat().toString());
         MigrateDiskInfo.DiskType diskType = MigrateDiskInfo.DiskType.BLOCK;
         MigrateDiskInfo.Source diskSource = MigrateDiskInfo.Source.DEV;
         StoragePoolType poolType = destStoragePool.getPoolType();
@@ -1868,8 +1891,7 @@ public class StorageSystemDataMotionStrategy implements DataMotionStrategy {
             diskSource = MigrateCommand.MigrateDiskInfo.Source.FILE;
         }
         MigrateCommand.MigrateDiskInfo migrateDiskInfo = new MigrateDiskInfo(srcVolumeInfo.getPath(), diskType, driverType, diskSource, libvirtDestImgPath);
-        migrateDiskInfo.setSourceDiskOnLocalStorage(sourceStoragePool.isLocal());
-        migrateDiskInfoList.add(migrateDiskInfo);
+        setDiskOnLocalStorageAndAddDiskInfo(migrateDiskInfoList, sourceStoragePool, migrateDiskInfo);
         migrateStorage.put(srcVolumeInfo.getPath(), migrateDiskInfo);
     }
 

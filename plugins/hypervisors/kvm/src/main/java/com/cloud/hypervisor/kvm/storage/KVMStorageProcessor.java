@@ -1059,7 +1059,7 @@ public class KVMStorageProcessor implements StorageProcessor {
         if (result == null && !isAttach) {
             for (final DiskDef disk : disks) {
                 if (disk.getDeviceType() == DiskDef.DeviceType.CDROM) {
-                    resource.cleanupDisk(disk);
+                    resource.disconnectDisk(disk);
                 }
             }
 

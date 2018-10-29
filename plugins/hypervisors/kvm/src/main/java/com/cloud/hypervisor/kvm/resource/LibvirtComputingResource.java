@@ -2411,7 +2411,7 @@ public class LibvirtComputingResource extends ServerResourceBase implements Serv
         return _storagePoolMgr.disconnectPhysicalDisk(volumeToDisconnect);
     }
 
-    public boolean cleanupDisk(final DiskDef disk) {
+    public boolean disconnectDisk(final DiskDef disk) {
         final String path = disk.getDiskPath();
 
         if (path == null) {
@@ -2453,7 +2453,7 @@ public class LibvirtComputingResource extends ServerResourceBase implements Serv
             for (final DiskDef disk : disks) {
                 if (disk.getDeviceType() == DiskDef.DeviceType.CDROM
                         && (diskSeq == null || disk.getDiskLabel() == iso.getDiskLabel())) {
-                    cleanupDisk(disk);
+                    disconnectDisk(disk);
                 }
             }
 
