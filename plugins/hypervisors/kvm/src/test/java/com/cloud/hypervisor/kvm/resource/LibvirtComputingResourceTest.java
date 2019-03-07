@@ -30,6 +30,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Scanner;
 import java.util.UUID;
 import java.util.Vector;
 
@@ -47,6 +48,7 @@ import org.apache.commons.lang.SystemUtils;
 import org.joda.time.Duration;
 import org.junit.Assert;
 import org.junit.Assume;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.libvirt.Connect;
@@ -64,7 +66,9 @@ import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.powermock.api.mockito.PowerMockito;
+import org.powermock.core.classloader.annotations.PrepareForTest;
+import org.powermock.modules.junit4.PowerMockRunner;
 import org.w3c.dom.Document;
 import org.xml.sax.SAXException;
 
@@ -186,7 +190,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.class)
+@RunWith(PowerMockRunner.class)
+@PrepareForTest(value = {MemStat.class})
 public class LibvirtComputingResourceTest {
 
     @Mock
@@ -198,6 +203,19 @@ public class LibvirtComputingResourceTest {
 
     String hyperVisorType = "kvm";
     Random random = new Random();
+    final String memInfo = "MemTotal:        5830236 kB\n" +
+            "MemFree:          156752 kB\n" +
+            "Buffers:          326836 kB\n" +
+            "Cached:          2606764 kB\n" +
+            "SwapCached:            0 kB\n" +
+            "Active:          4260808 kB\n" +
+            "Inactive:         949392 kB\n";
+
+    @Before
+    public void setup() throws Exception {
+        Scanner scanner = new Scanner(memInfo);
+        PowerMockito.whenNew(Scanner.class).withAnyArguments().thenReturn(scanner);
+    }
 
     /**
      This test tests if the Agent can handle a vmSpec coming
