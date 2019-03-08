@@ -442,10 +442,11 @@ public class LibvirtComputingResourceTest {
     public void testGetNicStats() {
         //this test is only working on linux because of the loopback interface name
         //also the tested code seems to work only on linux
-        Assume.assumeTrue(SystemUtils.IS_OS_LINUX);
-        final LibvirtComputingResource libvirtComputingResource = new LibvirtComputingResource();
-        final Pair<Double, Double> stats = libvirtComputingResource.getNicStats("lo");
-        assertNotNull(stats);
+        if(SystemUtils.IS_OS_LINUX) {
+            final LibvirtComputingResource libvirtComputingResource = new LibvirtComputingResource();
+            final Pair<Double, Double> stats = libvirtComputingResource.getNicStats("lo");
+            assertNotNull(stats);
+        } // else SUCCESS
     }
 
     @Test
