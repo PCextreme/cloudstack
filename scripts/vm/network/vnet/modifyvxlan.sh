@@ -41,13 +41,13 @@ addVxlan() {
     local FAMILY=$4
     local VXLAN_DEV=vxlan${VNI}
     local GROUP=$(multicastGroup ${VNI} ${FAMILY})
+    local ADDR=$(ip -6 -o addr show scope global dev ${PIF}|head -1|awk '{print $4}')
 
-    echo "multicast ${GROUP} for VNI ${VNI} on ${PIF}"
+    echo "multicast ${GROUP} for VNI ${VNI} on ${PIF} using ${ADDR}"
 
     if [[ ! -d /sys/class/net/${VXLAN_DEV} ]]; then
-        ip -f ${FAMILY} link add ${VXLAN_DEV} type vxlan id ${VNI} group ${GROUP} ttl 10 dev ${PIF}
+        ip -f ${FAMILY} link add ${VXLAN_DEV} type vxlan id ${VNI} local ${ADDR} nolearning
         ip link set ${VXLAN_DEV} up
-        ip -f ${FAMILY} route add ${GROUP} dev ${PIF}
         sysctl -qw net.ipv6.conf.${VXLAN_DEV}.disable_ipv6=1
     fi
 
@@ -70,8 +70,6 @@ deleteVxlan() {
     local FAMILY=$4
     local VXLAN_DEV=vxlan${VNI}
     local GROUP=$(multicastGroup ${VNI} ${FAMILY})
-
-    ip -f ${FAMILY} route del ${GROUP} dev ${PIF}
 
     ip link set ${VXLAN_DEV} nomaster
     ip link delete ${VXLAN_DEV}
