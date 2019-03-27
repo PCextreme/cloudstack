@@ -47,7 +47,6 @@ import com.cloud.hypervisor.kvm.resource.LibvirtVMDef.CpuTuneDef;
 import org.apache.commons.lang.SystemUtils;
 import org.joda.time.Duration;
 import org.junit.Assert;
-import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
