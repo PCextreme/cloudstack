@@ -18,19 +18,21 @@
 
 # modifyvxlan.sh -- Managed VXLAN devices and Bridges on Linux KVM hypervisor
 
+DSTPORT=4789
+
 usage() {
     echo "Usage: $0: -o <op>(add | delete) -v <vxlan id> -p <pif> -b <bridge name> (-6)"
 }
 
-multicastGroup() {
-    local VNI=$1
-    local FAMILY=$2
+localAddr() {
+    local FAMILY=$1
+
     if [[ -z "$FAMILY" || $FAMILY == "inet" ]]; then
-        echo "239.$(( (${VNI} >> 16) % 256 )).$(( (${VNI} >> 8) % 256 )).$(( ${VNI} % 256 ))"
+       ip -4 -o addr show scope global | awk 'NR==1 {gsub("/[0-9]+", "") ; print $4}'
     fi
 
     if [[ "$FAMILY" == "inet6" ]]; then
-        echo "ff05::$(( (${VNI} >> 16) % 256 )):$(( (${VNI} >> 8) % 256 )):$(( ${VNI} % 256 ))"
+       ip -6 -o addr show scope global | awk 'NR==1 {gsub("/[0-9]+", "") ; print $4}'
     fi
 }
 
@@ -40,13 +42,12 @@ addVxlan() {
     local VXLAN_BR=$3
     local FAMILY=$4
     local VXLAN_DEV=vxlan${VNI}
-    local GROUP=$(multicastGroup ${VNI} ${FAMILY})
-    local ADDR=$(ip -6 -o addr show scope global dev ${PIF}|head -1|awk '{print $4}')
+    local ADDR=$(localAddr ${FAMILY})
 
-    echo "multicast ${GROUP} for VNI ${VNI} on ${PIF} using ${ADDR}"
+    echo "local addr for VNI ${VNI} is ${ADDR}"
 
     if [[ ! -d /sys/class/net/${VXLAN_DEV} ]]; then
-        ip -f ${FAMILY} link add ${VXLAN_DEV} type vxlan id ${VNI} local ${ADDR} nolearning
+        ip -f ${FAMILY} link add ${VXLAN_DEV} type vxlan id ${VNI} local ${ADDR} dstport ${DSTPORT} nolearning
         ip link set ${VXLAN_DEV} up
         sysctl -qw net.ipv6.conf.${VXLAN_DEV}.disable_ipv6=1
     fi
@@ -69,7 +70,6 @@ deleteVxlan() {
     local VXLAN_BR=$3
     local FAMILY=$4
     local VXLAN_DEV=vxlan${VNI}
-    local GROUP=$(multicastGroup ${VNI} ${FAMILY})
 
     ip link set ${VXLAN_DEV} nomaster
     ip link delete ${VXLAN_DEV}
