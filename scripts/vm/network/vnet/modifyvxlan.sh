@@ -20,6 +20,9 @@
 
 DSTPORT=4789
 
+# We bind our VXLAN tunnel IP(v4) on Loopback device 'lo'
+DEV="lo"
+
 usage() {
     echo "Usage: $0: -o <op>(add | delete) -v <vxlan id> -p <pif> -b <bridge name> (-6)"
 }
@@ -28,11 +31,11 @@ localAddr() {
     local FAMILY=$1
 
     if [[ -z "$FAMILY" || $FAMILY == "inet" ]]; then
-       ip -4 -o addr show scope global | awk 'NR==1 {gsub("/[0-9]+", "") ; print $4}'
+       ip -4 -o addr show scope global dev ${DEV} | awk 'NR==1 {gsub("/[0-9]+", "") ; print $4}'
     fi
 
     if [[ "$FAMILY" == "inet6" ]]; then
-       ip -6 -o addr show scope global | awk 'NR==1 {gsub("/[0-9]+", "") ; print $4}'
+       ip -6 -o addr show scope global dev ${DEV} | awk 'NR==1 {gsub("/[0-9]+", "") ; print $4}'
     fi
 }
 
