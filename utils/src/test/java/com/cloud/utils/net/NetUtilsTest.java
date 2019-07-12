@@ -709,4 +709,11 @@ public class NetUtilsTest {
         assertFalse(NetUtils.isIPv6EUI64("2001:db8::100:1"));
         assertFalse(NetUtils.isIPv6EUI64("2a01:4f9:2a:185f::2"));
     }
+
+    @Test
+    public void testLinkLocal() {
+        assertEquals("255.255.255.0", NetUtils.getLinkLocalNetMask());
+        assertEquals("169.254.0.1", NetUtils.getLinkLocalGateway());
+        assertEquals("169.254.0.0/16", NetUtils.getLinkLocalCIDR());
+    }
 }

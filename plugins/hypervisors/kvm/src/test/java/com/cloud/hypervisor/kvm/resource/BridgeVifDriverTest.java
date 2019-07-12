@@ -55,4 +55,10 @@ public class BridgeVifDriverTest {
         Assert.assertTrue(driver.isValidProtocolAndVnetId("123", "vlan"));
         Assert.assertTrue(driver.isValidProtocolAndVnetId("456", "vxlan"));
     }
+
+    @Test
+    public void testVxNetBridgeName() {
+        Assert.assertEquals("brvx-500", driver.generateVxnetBrName(null, 500));
+        Assert.assertEquals("brvx-10000", driver.generateVxnetBrName(null, 10000));
+    }
 }
