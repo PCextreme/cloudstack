@@ -78,12 +78,11 @@ public class BridgeVifDriver extends VifDriverBase {
         String controlCidr = (String)params.get("control.cidr");
         if (StringUtils.isNotBlank(controlCidr)) {
             _controlCidr = controlCidr;
+            SubnetUtils subnetUtils = new SubnetUtils(_controlCidr);
+            _linkLocalGateway = subnetUtils.getInfo().getLowAddress();
+            _linkLocalNetmask = subnetUtils.getInfo().getNetmask();
+            _linkLocalAddress = _linkLocalGateway + "/" + _linkLocalNetmask;
         }
-
-        SubnetUtils subnetUtils = new SubnetUtils(_controlCidr);
-        _linkLocalGateway = subnetUtils.getInfo().getLowAddress();
-        _linkLocalNetmask = subnetUtils.getInfo().getNetmask();
-        _linkLocalAddress = _linkLocalGateway + "/" + _linkLocalNetmask;
 
         String value = (String)params.get("scripts.timeout");
         _timeout = NumbersUtil.parseInt(value, 30 * 60) * 1000;
