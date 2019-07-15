@@ -29,6 +29,7 @@ import java.util.regex.Pattern;
 import javax.naming.ConfigurationException;
 
 import com.cloud.utils.StringUtils;
+import org.apache.commons.net.util.SubnetUtils;
 import org.apache.log4j.Logger;
 import org.libvirt.LibvirtException;
 
@@ -50,10 +51,10 @@ public class BridgeVifDriver extends VifDriverBase {
     private final Object _vnetBridgeMonitor = new Object();
     private String _modifyVlanPath;
     private String _modifyVxlanPath;
-    private String _linkLocalCidr = "169.254.0.0/16";
-    private String _linkLocalAddress = "169.254.0.1/16";
+    private String _controlCidr = NetUtils.getLinkLocalCIDR();
     private String _linkLocalGateway = NetUtils.getLinkLocalGateway();
     private String _linkLocalNetmask = NetUtils.getLinkLocalNetMask();
+    private String _linkLocalAddress = _linkLocalGateway + "/" + _linkLocalNetmask;
     private String bridgeNameSchema;
     private Long libvirtVersion;
 
@@ -74,25 +75,15 @@ public class BridgeVifDriver extends VifDriverBase {
 
         bridgeNameSchema = (String)params.get("network.bridge.name.schema");
 
-        String linkLocalCidr = (String)params.get("network.linklocal.cidr");
-        if (StringUtils.isNotBlank(linkLocalCidr)) {
-            _linkLocalCidr = linkLocalCidr;
+        String controlCidr = (String)params.get("control.cidr");
+        if (StringUtils.isNotBlank(controlCidr)) {
+            _controlCidr = controlCidr;
         }
 
-        String linkLocalAddress = (String)params.get("network.linklocal.address");
-        if (StringUtils.isNotBlank(linkLocalAddress)) {
-            _linkLocalAddress = linkLocalAddress;
-        }
-
-        String linkLocalGateway = (String)params.get("network.linklocal.gateway");
-        if (StringUtils.isNotBlank(linkLocalGateway)) {
-            _linkLocalGateway = linkLocalGateway;
-        }
-
-        String linkLocalNetmask = (String)params.get("network.linklocal.netmask");
-        if (StringUtils.isNotBlank(linkLocalNetmask)) {
-            _linkLocalNetmask = _linkLocalNetmask;
-        }
+        SubnetUtils subnetUtils = new SubnetUtils(_controlCidr);
+        _linkLocalGateway = subnetUtils.getInfo().getLowAddress();
+        _linkLocalNetmask = subnetUtils.getInfo().getNetmask();
+        _linkLocalAddress = _linkLocalGateway + "/" + _linkLocalNetmask;
 
         String value = (String)params.get("scripts.timeout");
         _timeout = NumbersUtil.parseInt(value, 30 * 60) * 1000;
@@ -409,7 +400,7 @@ public class BridgeVifDriver extends VifDriverBase {
     private void deleteExistingLinkLocalRouteTable(String linkLocalBr) {
         Script command = new Script("/bin/bash", _timeout);
         command.add("-c");
-        command.add("ip route | grep " + _linkLocalCidr);
+        command.add("ip route | grep " + _controlCidr);
         OutputInterpreter.AllLinesParser parser = new OutputInterpreter.AllLinesParser();
         String result = command.execute(parser);
         boolean foundLinkLocalBr = false;
@@ -422,15 +413,15 @@ public class BridgeVifDriver extends VifDriverBase {
                 }
                 final String device = tokens[2];
                 if (!Strings.isNullOrEmpty(device) && !device.equalsIgnoreCase(linkLocalBr)) {
-                    Script.runSimpleBashScript("ip route del " + _linkLocalCidr + " dev " + tokens[2]);
+                    Script.runSimpleBashScript("ip route del " + _controlCidr + " dev " + tokens[2]);
                 } else {
                     foundLinkLocalBr = true;
                 }
             }
         }
         if (!foundLinkLocalBr) {
-            Script.runSimpleBashScript("ip address add " + _linkLocalAddress + " dev " + linkLocalBr + ";" + "ip route add " + _linkLocalCidr + " dev " + linkLocalBr + " src " +
-                    _linkLocalGateway;
+            Script.runSimpleBashScript("ip address add " + _linkLocalAddress + " dev " + linkLocalBr + ";" + "ip route add " + _controlCidr + " dev " + linkLocalBr + " src " +
+                    _linkLocalGateway);
         }
     }
 

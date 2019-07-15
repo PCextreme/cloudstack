@@ -967,19 +967,13 @@ public class NetUtils {
         return "169.254.0.0/16";
     }
 
-    public static String[] getLinkLocalIPRange(final int size) {
-        if (size > 16 || size <= 0) {
-            return null;
-        }
-        /* reserve gateway */
-        final String[] range = getIpRangeFromCidr(getLinkLocalGateway(), MAX_CIDR - size);
+    public static String[] getLinkLocalIPRange(final String cidr) {
+        final SubnetUtils subnetUtils = new SubnetUtils(cidr);
+        final String[] addresses = subnetUtils.getInfo().getAllAddresses();
+        final String[] range = new String[2];
+        range[0] = addresses[1];
+        range[1] = subnetUtils.getInfo().getHighAddress();
 
-        if (range[0].equalsIgnoreCase(getLinkLocalGateway())) {
-            /* remove the gateway */
-            long ip = ip2Long(range[0]);
-            ip += 1;
-            range[0] = long2Ip(ip);
-        }
         return range;
     }
 

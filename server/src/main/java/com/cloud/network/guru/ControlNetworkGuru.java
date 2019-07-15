@@ -162,9 +162,9 @@ public class ControlNetworkGuru extends PodBasedNetworkGuru implements NetworkGu
         }
         nic.setIPv4Address(ip);
         nic.setMacAddress(NetUtils.long2Mac(NetUtils.ip2Long(ip) | (14l << 40)));
-        nic.setIPv4Netmask("255.255.0.0");
+        nic.setIPv4Netmask(NetUtils.cidr2Netmask(_cidr));
         nic.setFormat(AddressFormat.Ip4);
-        nic.setIPv4Gateway(NetUtils.getLinkLocalGateway());
+        nic.setIPv4Gateway(_gateway);
     }
 
     @Override
@@ -223,7 +223,7 @@ public class ControlNetworkGuru extends PodBasedNetworkGuru implements NetworkGu
 
         _cidr = dbParams.get(Config.ControlCidr.toString());
         if (_cidr == null) {
-            _cidr = "169.254.0.0/16";
+            _cidr = NetUtils.getLinkLocalCIDR();
         }
 
         _gateway = dbParams.get(Config.ControlGateway.toString());
