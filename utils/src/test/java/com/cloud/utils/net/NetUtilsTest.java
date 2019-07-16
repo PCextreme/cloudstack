@@ -718,6 +718,7 @@ public class NetUtilsTest {
         assertEquals("169.254.0.0/16", cidr);
         assertEquals("169.254.0.1", NetUtils.getLinkLocalGatewayFromCIDR(cidr));
         assertEquals("255.255.0.0", NetUtils.getLinkLocalNetmaskFromCIDR(cidr));
+        assertEquals("169.254.0.1/255.255.0.0", NetUtils.getLinkLocalAddressFromCIDR(cidr));
 
         String[] range = NetUtils.getLinkLocalIPRange("169.254.0.0/16");
         assertEquals("169.254.0.2", range[0]);

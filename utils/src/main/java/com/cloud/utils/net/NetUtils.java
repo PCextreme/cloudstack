@@ -977,6 +977,10 @@ public class NetUtils {
         return subnetUtils.getInfo().getNetmask();
     }
 
+    public static String getLinkLocalAddressFromCIDR(final String cidr) {
+        return getLinkLocalGatewayFromCIDR(cidr) + "/" + getLinkLocalNetmaskFromCIDR(cidr);
+    }
+
     public static String[] getLinkLocalIPRange(final String cidr) {
         final SubnetUtils subnetUtils = new SubnetUtils(cidr);
         final String[] addresses = subnetUtils.getInfo().getAllAddresses();
