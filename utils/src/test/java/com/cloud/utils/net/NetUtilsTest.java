@@ -717,8 +717,8 @@ public class NetUtilsTest {
         assertEquals("169.254.0.1", NetUtils.getLinkLocalGateway());
         assertEquals("169.254.0.0/16", cidr);
         assertEquals("169.254.0.1", NetUtils.getLinkLocalGatewayFromCIDR(cidr));
-        assertEquals("255.255.0.0", NetUtils.getLinkLocalNetmaskFromCIDR(cidr));
         assertEquals("169.254.0.1/255.255.0.0", NetUtils.getLinkLocalAddressFromCIDR(cidr));
+        assertEquals("169.254.240.1/255.255.240.0", NetUtils.getLinkLocalAddressFromCIDR("169.254.240.0/20"));
 
         String[] range = NetUtils.getLinkLocalIPRange("169.254.0.0/16");
         assertEquals("169.254.0.2", range[0]);
@@ -729,5 +729,6 @@ public class NetUtilsTest {
     public void testCidrNetmask() {
         assertEquals("255.255.255.0", NetUtils.cidr2Netmask("192.168.0.0/24"));
         assertEquals("255.255.0.0", NetUtils.cidr2Netmask("169.254.0.0/16"));
+        assertEquals("255.255.240.0", NetUtils.cidr2Netmask("169.254.240.0/20"));
     }
 }

@@ -972,13 +972,8 @@ public class NetUtils {
         return subnetUtils.getInfo().getLowAddress();
     }
 
-    public static String getLinkLocalNetmaskFromCIDR(final String cidr) {
-        SubnetUtils subnetUtils = new SubnetUtils(cidr);
-        return subnetUtils.getInfo().getNetmask();
-    }
-
     public static String getLinkLocalAddressFromCIDR(final String cidr) {
-        return getLinkLocalGatewayFromCIDR(cidr) + "/" + getLinkLocalNetmaskFromCIDR(cidr);
+        return getLinkLocalGatewayFromCIDR(cidr) + "/" + cidr2Netmask(cidr);
     }
 
     public static String[] getLinkLocalIPRange(final String cidr) {
