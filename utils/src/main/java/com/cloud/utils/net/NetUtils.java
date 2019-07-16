@@ -967,6 +967,16 @@ public class NetUtils {
         return "169.254.0.0/16";
     }
 
+    public static String getLinkLocalGatewayFromCIDR(final String cidr) {
+        SubnetUtils subnetUtils = new SubnetUtils(cidr);
+        return subnetUtils.getInfo().getLowAddress();
+    }
+
+    public static String getLinkLocalNetmaskFromCIDR(final String cidr) {
+        SubnetUtils subnetUtils = new SubnetUtils(cidr);
+        return subnetUtils.getInfo().getNetmask();
+    }
+
     public static String[] getLinkLocalIPRange(final String cidr) {
         final SubnetUtils subnetUtils = new SubnetUtils(cidr);
         final String[] addresses = subnetUtils.getInfo().getAllAddresses();

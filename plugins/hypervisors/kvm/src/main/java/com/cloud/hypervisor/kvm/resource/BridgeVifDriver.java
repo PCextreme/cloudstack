@@ -52,9 +52,9 @@ public class BridgeVifDriver extends VifDriverBase {
     private String _modifyVlanPath;
     private String _modifyVxlanPath;
     private String _controlCidr = NetUtils.getLinkLocalCIDR();
-    private String _linkLocalGateway = NetUtils.getLinkLocalGateway();
-    private String _linkLocalNetmask = NetUtils.getLinkLocalNetMask();
-    private String _linkLocalAddress = _linkLocalGateway + "/" + _linkLocalNetmask;
+    private String _linkLocalGateway;
+    private String _linkLocalNetmask;
+    private String _linkLocalAddress;
     private String bridgeNameSchema;
     private Long libvirtVersion;
 
@@ -78,11 +78,11 @@ public class BridgeVifDriver extends VifDriverBase {
         String controlCidr = (String)params.get("control.cidr");
         if (StringUtils.isNotBlank(controlCidr)) {
             _controlCidr = controlCidr;
-            SubnetUtils subnetUtils = new SubnetUtils(_controlCidr);
-            _linkLocalGateway = subnetUtils.getInfo().getLowAddress();
-            _linkLocalNetmask = subnetUtils.getInfo().getNetmask();
-            _linkLocalAddress = _linkLocalGateway + "/" + _linkLocalNetmask;
         }
+
+        _linkLocalGateway = NetUtils.getLinkLocalGatewayFromCIDR(_controlCidr);
+        _linkLocalNetmask = NetUtils.getLinkLocalNetmaskFromCIDR(_controlCidr);
+        _linkLocalAddress = _linkLocalGateway + "/" + _linkLocalNetmask;
 
         String value = (String)params.get("scripts.timeout");
         _timeout = NumbersUtil.parseInt(value, 30 * 60) * 1000;
