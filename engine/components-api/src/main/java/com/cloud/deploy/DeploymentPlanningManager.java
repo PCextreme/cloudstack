@@ -16,6 +16,8 @@
 // under the License.
 package com.cloud.deploy;
 
+import org.apache.cloudstack.framework.config.ConfigKey;
+
 import com.cloud.deploy.DeploymentPlanner.ExcludeList;
 import com.cloud.exception.AffinityConflictException;
 import com.cloud.exception.InsufficientServerCapacityException;
@@ -23,6 +25,8 @@ import com.cloud.utils.component.Manager;
 import com.cloud.vm.VirtualMachineProfile;
 
 public interface DeploymentPlanningManager extends Manager {
+    static final ConfigKey<Boolean> sytemVmInDisabledCluster = new ConfigKey<Boolean>("Advanced", Boolean.class, "system.vm.disabled.cluster", "true",
+            "Allow deploying System VMs in disabled clusters", true);
 
     /**
      * Manages vm deployment stages: First Process Affinity/Anti-affinity - Call

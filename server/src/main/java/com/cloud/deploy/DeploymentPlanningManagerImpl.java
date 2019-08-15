@@ -30,24 +30,21 @@ import java.util.TreeSet;
 import javax.inject.Inject;
 import javax.naming.ConfigurationException;
 
-import com.cloud.utils.db.Filter;
-import com.cloud.utils.fsm.StateMachine2;
-
-import org.apache.commons.collections.CollectionUtils;
-import org.apache.log4j.Logger;
+import org.apache.cloudstack.affinity.AffinityGroupDomainMapVO;
 import org.apache.cloudstack.affinity.AffinityGroupProcessor;
 import org.apache.cloudstack.affinity.AffinityGroupService;
 import org.apache.cloudstack.affinity.AffinityGroupVMMapVO;
 import org.apache.cloudstack.affinity.AffinityGroupVO;
-import org.apache.cloudstack.affinity.AffinityGroupDomainMapVO;
 import org.apache.cloudstack.affinity.dao.AffinityGroupDao;
-import org.apache.cloudstack.affinity.dao.AffinityGroupVMMapDao;
 import org.apache.cloudstack.affinity.dao.AffinityGroupDomainMapDao;
+import org.apache.cloudstack.affinity.dao.AffinityGroupVMMapDao;
 import org.apache.cloudstack.engine.cloud.entity.api.db.VMReservationVO;
 import org.apache.cloudstack.engine.cloud.entity.api.db.dao.VMReservationDao;
 import org.apache.cloudstack.engine.subsystem.api.storage.DataStore;
 import org.apache.cloudstack.engine.subsystem.api.storage.DataStoreManager;
 import org.apache.cloudstack.engine.subsystem.api.storage.StoragePoolAllocator;
+import org.apache.cloudstack.framework.config.ConfigKey;
+import org.apache.cloudstack.framework.config.Configurable;
 import org.apache.cloudstack.framework.config.dao.ConfigurationDao;
 import org.apache.cloudstack.framework.messagebus.MessageBus;
 import org.apache.cloudstack.framework.messagebus.MessageSubscriber;
@@ -55,6 +52,8 @@ import org.apache.cloudstack.managed.context.ManagedContextTimerTask;
 import org.apache.cloudstack.storage.datastore.db.PrimaryDataStoreDao;
 import org.apache.cloudstack.storage.datastore.db.StoragePoolVO;
 import org.apache.cloudstack.utils.identity.ManagementServerNode;
+import org.apache.commons.collections.CollectionUtils;
+import org.apache.log4j.Logger;
 
 import com.cloud.agent.AgentManager;
 import com.cloud.agent.Listener;
@@ -119,12 +118,14 @@ import com.cloud.utils.Pair;
 import com.cloud.utils.component.Manager;
 import com.cloud.utils.component.ManagerBase;
 import com.cloud.utils.db.DB;
+import com.cloud.utils.db.Filter;
 import com.cloud.utils.db.SearchCriteria;
 import com.cloud.utils.db.Transaction;
 import com.cloud.utils.db.TransactionCallback;
 import com.cloud.utils.db.TransactionStatus;
 import com.cloud.utils.exception.CloudRuntimeException;
 import com.cloud.utils.fsm.StateListener;
+import com.cloud.utils.fsm.StateMachine2;
 import com.cloud.vm.DiskProfile;
 import com.cloud.vm.VMInstanceVO;
 import com.cloud.vm.VirtualMachine;
@@ -135,9 +136,10 @@ import com.cloud.vm.dao.UserVmDao;
 import com.cloud.vm.dao.VMInstanceDao;
 
 public class DeploymentPlanningManagerImpl extends ManagerBase implements DeploymentPlanningManager, Manager, Listener,
-StateListener<State, VirtualMachine.Event, VirtualMachine> {
+        StateListener<State, VirtualMachine.Event, VirtualMachine>, Configurable {
 
     private static final Logger s_logger = Logger.getLogger(DeploymentPlanningManagerImpl.class);
+
     @Inject
     AgentManager _agentMgr;
     @Inject
@@ -1041,7 +1043,7 @@ StateListener<State, VirtualMachine.Event, VirtualMachine> {
         for (Long clusterId : clusterList) {
             ClusterVO clusterVO = _clusterDao.findById(clusterId);
 
-            if (clusterVO.getAllocationState() == Grouping.AllocationState.Disabled) {
+            if (clusterVO.getAllocationState() == Grouping.AllocationState.Disabled && !isSystemVmAndAllowedInDisabledCluster(vmProfile)) {
                 s_logger.debug("Cannot deploy in disabled cluster " + clusterId + ", skipping this cluster");
                 avoid.addCluster(clusterVO.getId());
             }
@@ -1109,6 +1111,13 @@ StateListener<State, VirtualMachine.Event, VirtualMachine> {
         }
         s_logger.debug("Could not find suitable Deployment Destination for this VM under any clusters, returning. ");
         return null;
+    }
+
+    /**
+     * TODO
+     */
+    private boolean isSystemVmAndAllowedInDisabledCluster(VirtualMachineProfile vmProfile) {
+        return vmProfile.getType().isUsedBySystem() && sytemVmInDisabledCluster.value();
     }
 
     private boolean canAvoidCluster(Cluster clusterVO, ExcludeList avoids, ExcludeList plannerAvoidOutput, VirtualMachineProfile vmProfile) {
@@ -1615,5 +1624,15 @@ StateListener<State, VirtualMachine.Event, VirtualMachine> {
         _reservationDao.expunge(sc);
       }
       return true;
+    }
+
+    @Override
+    public ConfigKey<?>[] getConfigKeys() {
+        return new ConfigKey<?>[] {sytemVmInDisabledCluster};
+    }
+
+    @Override
+    public String getConfigComponentName() {
+        return DeploymentPlanningManager.class.getSimpleName();
     }
 }
