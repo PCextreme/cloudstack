@@ -493,6 +493,7 @@ public class ApiServer extends ManagerBase implements HttpRequestHandler, ApiSer
                 final String responseText = getSerializedApiError(se, parameterMap, responseType);
                 writeResponse(response, responseText, se.getErrorCode().getHttpCode(), responseType, se.getDescription());
                 sb.append(" " + se.getErrorCode() + " " + se.getDescription());
+                throw se;
             } catch (final RuntimeException e) {
                 // log runtime exception like NullPointerException to help identify the source easier
                 s_logger.error("Unhandled exception, ", e);

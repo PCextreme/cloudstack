@@ -81,6 +81,8 @@ public interface HostDao extends GenericDao<HostVO, Long>, StateDao<Status, Stat
 
     List<HostVO> listByDataCenterId(long id);
 
+    List<HostVO> listDisabledByDataCenterId(long id);
+
     List<HostVO> listByDataCenterIdAndHypervisorType(long zoneId, Hypervisor.HypervisorType hypervisorType);
 
     List<Long> listAllHosts(long zoneId);

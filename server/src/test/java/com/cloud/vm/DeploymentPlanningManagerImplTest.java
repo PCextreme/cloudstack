@@ -28,16 +28,27 @@ import java.util.List;
 import javax.inject.Inject;
 import javax.naming.ConfigurationException;
 
-import com.cloud.host.Host;
+import org.apache.cloudstack.affinity.AffinityGroupProcessor;
+import org.apache.cloudstack.affinity.AffinityGroupService;
+import org.apache.cloudstack.affinity.dao.AffinityGroupDao;
 import org.apache.cloudstack.affinity.dao.AffinityGroupDomainMapDao;
+import org.apache.cloudstack.affinity.dao.AffinityGroupVMMapDao;
+import org.apache.cloudstack.engine.cloud.entity.api.db.dao.VMReservationDao;
+import org.apache.cloudstack.engine.subsystem.api.storage.DataStoreManager;
+import org.apache.cloudstack.framework.config.dao.ConfigurationDao;
+import org.apache.cloudstack.framework.messagebus.MessageBus;
+import org.apache.cloudstack.storage.datastore.db.PrimaryDataStoreDao;
+import org.apache.cloudstack.test.utils.SpringUtils;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.InjectMocks;
 import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.mockito.Spy;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.ComponentScan.Filter;
@@ -49,17 +60,6 @@ import org.springframework.core.type.filter.TypeFilter;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 import org.springframework.test.context.support.AnnotationConfigContextLoader;
-
-import org.apache.cloudstack.affinity.AffinityGroupProcessor;
-import org.apache.cloudstack.affinity.AffinityGroupService;
-import org.apache.cloudstack.affinity.dao.AffinityGroupDao;
-import org.apache.cloudstack.affinity.dao.AffinityGroupVMMapDao;
-import org.apache.cloudstack.engine.cloud.entity.api.db.dao.VMReservationDao;
-import org.apache.cloudstack.engine.subsystem.api.storage.DataStoreManager;
-import org.apache.cloudstack.framework.config.dao.ConfigurationDao;
-import org.apache.cloudstack.framework.messagebus.MessageBus;
-import org.apache.cloudstack.storage.datastore.db.PrimaryDataStoreDao;
-import org.apache.cloudstack.test.utils.SpringUtils;
 
 import com.cloud.agent.AgentManager;
 import com.cloud.capacity.CapacityManager;
@@ -84,6 +84,7 @@ import com.cloud.deploy.dao.PlannerHostReservationDao;
 import com.cloud.exception.AffinityConflictException;
 import com.cloud.exception.InsufficientServerCapacityException;
 import com.cloud.gpu.dao.HostGpuGroupsDao;
+import com.cloud.host.Host;
 import com.cloud.host.dao.HostDao;
 import com.cloud.host.dao.HostTagsDao;
 import com.cloud.hypervisor.Hypervisor.HypervisorType;
@@ -98,6 +99,7 @@ import com.cloud.storage.dao.GuestOSDao;
 import com.cloud.storage.dao.StoragePoolHostDao;
 import com.cloud.storage.dao.VolumeDao;
 import com.cloud.user.AccountManager;
+import com.cloud.user.dao.AccountDao;
 import com.cloud.utils.component.ComponentContext;
 import com.cloud.vm.dao.UserVmDao;
 import com.cloud.vm.dao.UserVmDetailsDao;
@@ -107,7 +109,8 @@ import com.cloud.vm.dao.VMInstanceDao;
 @ContextConfiguration(loader = AnnotationConfigContextLoader.class)
 public class DeploymentPlanningManagerImplTest {
 
-    @Inject
+    @Spy
+    @InjectMocks
     DeploymentPlanningManagerImpl _dpm;
 
     @Inject
@@ -142,6 +145,11 @@ public class DeploymentPlanningManagerImplTest {
 
     @Mock
     Host host;
+
+    @Inject
+    private AccountDao accountDao;
+    @Inject
+    private HostPodDao hostPodDao;
 
     private static long dataCenterId = 1L;
     private static long hostId = 1l;
@@ -179,14 +187,13 @@ public class DeploymentPlanningManagerImplTest {
         _dpm.setPlanners(planners);
 
         Mockito.when(host.getId()).thenReturn(hostId);
+        Mockito.doNothing().when(_dpm).avoidDisabledResources(vmProfile, dc, avoids);
     }
 
     @Test
     public void dataCenterAvoidTest() throws InsufficientServerCapacityException, AffinityConflictException {
-        ServiceOfferingVO svcOffering =
-            new ServiceOfferingVO("testOffering", 1, 512, 500, 1, 1, false, false, false, "test dpm",
-                    ProvisioningType.THIN, false, false, null, false, VirtualMachine.Type.User,
-                    null, "FirstFitPlanner");
+        ServiceOfferingVO svcOffering = new ServiceOfferingVO("testOffering", 1, 512, 500, 1, 1, false, false, false, "test dpm", ProvisioningType.THIN, false, false, null, false,
+                VirtualMachine.Type.User, null, "FirstFitPlanner");
         Mockito.when(vmProfile.getServiceOffering()).thenReturn(svcOffering);
 
         DataCenterDeployment plan = new DataCenterDeployment(dataCenterId);
@@ -198,10 +205,8 @@ public class DeploymentPlanningManagerImplTest {
 
     @Test
     public void plannerCannotHandleTest() throws InsufficientServerCapacityException, AffinityConflictException {
-        ServiceOfferingVO svcOffering =
-            new ServiceOfferingVO("testOffering", 1, 512, 500, 1, 1, false, false, false, "test dpm",
-                    ProvisioningType.THIN, false, false, null, false, VirtualMachine.Type.User,
-                    null, "UserDispersingPlanner");
+        ServiceOfferingVO svcOffering = new ServiceOfferingVO("testOffering", 1, 512, 500, 1, 1, false, false, false, "test dpm", ProvisioningType.THIN, false, false, null, false,
+                VirtualMachine.Type.User, null, "UserDispersingPlanner");
         Mockito.when(vmProfile.getServiceOffering()).thenReturn(svcOffering);
 
         DataCenterDeployment plan = new DataCenterDeployment(dataCenterId);
@@ -214,10 +219,8 @@ public class DeploymentPlanningManagerImplTest {
 
     @Test
     public void emptyClusterListTest() throws InsufficientServerCapacityException, AffinityConflictException {
-        ServiceOfferingVO svcOffering =
-            new ServiceOfferingVO("testOffering", 1, 512, 500, 1, 1, false, false, false, "test dpm",
-                ProvisioningType.THIN, false, false, null, false, VirtualMachine.Type.User,
-                    null, "FirstFitPlanner");
+        ServiceOfferingVO svcOffering = new ServiceOfferingVO("testOffering", 1, 512, 500, 1, 1, false, false, false, "test dpm", ProvisioningType.THIN, false, false, null, false,
+                VirtualMachine.Type.User, null, "FirstFitPlanner");
         Mockito.when(vmProfile.getServiceOffering()).thenReturn(svcOffering);
 
         DataCenterDeployment plan = new DataCenterDeployment(dataCenterId);
@@ -250,8 +253,8 @@ public class DeploymentPlanningManagerImplTest {
     }
 
     @Configuration
-    @ComponentScan(basePackageClasses = {DeploymentPlanningManagerImpl.class}, includeFilters = {@Filter(value = TestConfiguration.Library.class,
-                                                                                                         type = FilterType.CUSTOM)}, useDefaultFilters = false)
+    @ComponentScan(basePackageClasses = {DeploymentPlanningManagerImpl.class}, includeFilters = {
+            @Filter(value = TestConfiguration.Library.class, type = FilterType.CUSTOM)}, useDefaultFilters = false)
     public static class TestConfiguration extends SpringUtils.CloudStackTestConfiguration {
 
         @Bean
@@ -445,8 +448,13 @@ public class DeploymentPlanningManagerImplTest {
         }
 
         @Bean
-        public HostGpuGroupsDao hostGpuGroupsDap() {
+        public HostGpuGroupsDao hostGpuGroupsDao() {
             return Mockito.mock(HostGpuGroupsDao.class);
+        }
+
+        @Bean
+        public AccountDao accountDao() {
+            return Mockito.mock(AccountDao.class);
         }
 
         public static class Library implements TypeFilter {

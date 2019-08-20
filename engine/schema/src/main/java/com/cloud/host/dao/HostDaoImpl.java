@@ -431,13 +431,26 @@ public class HostDaoImpl extends GenericDaoBase<HostVO, Long> implements HostDao
 
     @Override
     public List<HostVO> listByDataCenterId(long id) {
+        SearchCriteria<HostVO> sc = scHostsFromZoneUpRouting(id);
+        sc.setParameters("resourceState", ResourceState.Enabled);
+
+        return listBy(sc);
+    }
+
+    @Override
+    public List<HostVO> listDisabledByDataCenterId(long id) {
+        SearchCriteria<HostVO> sc = scHostsFromZoneUpRouting(id);
+        sc.setParameters("resourceState", ResourceState.Disabled);
+
+        return listBy(sc);
+    }
+
+    private SearchCriteria<HostVO> scHostsFromZoneUpRouting(long id) {
         SearchCriteria<HostVO> sc = DcSearch.create();
         sc.setParameters("dc", id);
         sc.setParameters("status", Status.Up);
         sc.setParameters("type", Host.Type.Routing);
-        sc.setParameters("resourceState", ResourceState.Enabled);
-
-        return listBy(sc);
+        return sc;
     }
 
     @Override
