@@ -301,17 +301,7 @@ public class DeploymentPlanningManagerImpl extends ManagerBase implements Deploy
 
                 Pod pod = _podDao.findById(host.getPodId());
                 // check if the cluster or the pod is disabled
-                if (pod.getAllocationState() != Grouping.AllocationState.Enabled) {
-                    s_logger.warn("The Pod containing this host is in disabled state, PodId= " + pod.getId());
-                    return null;
-                }
-
                 Cluster cluster = _clusterDao.findById(host.getClusterId());
-                if (cluster.getAllocationState() != Grouping.AllocationState.Enabled) {
-                    s_logger.warn("The Cluster containing this host is in disabled state, PodId= " + cluster.getId());
-                    return null;
-                }
-
                 if (vm.getHypervisorType() == HypervisorType.BareMetal) {
                     DeployDestination dest = new DeployDestination(dc, pod, cluster, host, new HashMap<Volume, StoragePool>());
                     s_logger.debug("Returning Deployment Destination: " + dest);
@@ -576,10 +566,10 @@ public class DeploymentPlanningManagerImpl extends ManagerBase implements Deploy
         avoidDisabledDataCenters(dc, avoids);
         avoidDisabledPods(dc, avoids);
         avoidDisabledClusters(dc, avoids);
-        avoidDissabledHosts(dc, avoids);
+        avoidDisabledHosts(dc, avoids);
     }
 
-    private void avoidDissabledHosts(DataCenter dc, ExcludeList avoids) {
+    private void avoidDisabledHosts(DataCenter dc, ExcludeList avoids) {
         List<HostVO> disabledHosts = _hostDao.listDisabledByDataCenterId(dc.getId());
         for (HostVO host : disabledHosts) {
             avoids.addHost(host.getId());
@@ -1098,11 +1088,6 @@ public class DeploymentPlanningManagerImpl extends ManagerBase implements Deploy
         for (Long clusterId : clusterList) {
             ClusterVO clusterVO = _clusterDao.findById(clusterId);
 
-            if (clusterVO.getAllocationState() == Grouping.AllocationState.Disabled) {
-                s_logger.debug("Cannot deploy in disabled cluster " + clusterId + ", skipping this cluster");
-                avoid.addCluster(clusterVO.getId());
-            }
-
             if (clusterVO.getHypervisorType() != vmProfile.getHypervisorType()) {
                 s_logger.debug("Cluster: " + clusterId + " has HyperVisorType that does not match the VM, skipping this cluster");
                 avoid.addCluster(clusterVO.getId());
@@ -1116,48 +1101,43 @@ public class DeploymentPlanningManagerImpl extends ManagerBase implements Deploy
                     new DataCenterDeployment(plan.getDataCenterId(), clusterVO.getPodId(), clusterVO.getId(), null, plan.getPoolId(), null, plan.getReservationContext());
 
             Pod pod = _podDao.findById(clusterVO.getPodId());
-            if (pod.getAllocationState() == Grouping.AllocationState.Enabled ) {
-                // find suitable hosts under this cluster, need as many hosts as we
-                // get.
-                List<Host> suitableHosts = findSuitableHosts(vmProfile, potentialPlan, avoid, HostAllocator.RETURN_UPTO_ALL);
-                // if found suitable hosts in this cluster, find suitable storage
-                // pools for each volume of the VM
-                if (suitableHosts != null && !suitableHosts.isEmpty()) {
-                    if (vmProfile.getHypervisorType() == HypervisorType.BareMetal) {
-                        DeployDestination dest = new DeployDestination(dc, pod, clusterVO, suitableHosts.get(0));
+            // find suitable hosts under this cluster, need as many hosts as we
+            // get.
+            List<Host> suitableHosts = findSuitableHosts(vmProfile, potentialPlan, avoid, HostAllocator.RETURN_UPTO_ALL);
+            // if found suitable hosts in this cluster, find suitable storage
+            // pools for each volume of the VM
+            if (suitableHosts != null && !suitableHosts.isEmpty()) {
+                if (vmProfile.getHypervisorType() == HypervisorType.BareMetal) {
+                    DeployDestination dest = new DeployDestination(dc, pod, clusterVO, suitableHosts.get(0));
+                    return dest;
+                }
+
+                Pair<Map<Volume, List<StoragePool>>, List<Volume>> result = findSuitablePoolsForVolumes(vmProfile, potentialPlan, avoid, StoragePoolAllocator.RETURN_UPTO_ALL);
+                Map<Volume, List<StoragePool>> suitableVolumeStoragePools = result.first();
+                List<Volume> readyAndReusedVolumes = result.second();
+
+                // choose the potential host and pool for the VM
+                if (!suitableVolumeStoragePools.isEmpty()) {
+                    Pair<Host, Map<Volume, StoragePool>> potentialResources = findPotentialDeploymentResources(suitableHosts, suitableVolumeStoragePools, avoid,
+                            resourceUsageRequired, readyAndReusedVolumes, plan.getPreferredHosts());
+
+                    if (potentialResources != null) {
+                        Host host = _hostDao.findById(potentialResources.first().getId());
+                        Map<Volume, StoragePool> storageVolMap = potentialResources.second();
+                        // remove the reused vol<->pool from destination, since
+                        // we don't have to prepare this volume.
+                        for (Volume vol : readyAndReusedVolumes) {
+                            storageVolMap.remove(vol);
+                        }
+                        DeployDestination dest = new DeployDestination(dc, pod, clusterVO, host, storageVolMap);
+                        s_logger.debug("Returning Deployment Destination: " + dest);
                         return dest;
                     }
-
-                    Pair<Map<Volume, List<StoragePool>>, List<Volume>> result = findSuitablePoolsForVolumes(vmProfile, potentialPlan, avoid, StoragePoolAllocator.RETURN_UPTO_ALL);
-                    Map<Volume, List<StoragePool>> suitableVolumeStoragePools = result.first();
-                    List<Volume> readyAndReusedVolumes = result.second();
-
-                    // choose the potential host and pool for the VM
-                    if (!suitableVolumeStoragePools.isEmpty()) {
-                        Pair<Host, Map<Volume, StoragePool>> potentialResources = findPotentialDeploymentResources(suitableHosts, suitableVolumeStoragePools, avoid,
-                                resourceUsageRequired, readyAndReusedVolumes, plan.getPreferredHosts());
-
-                        if (potentialResources != null) {
-                            Host host = _hostDao.findById(potentialResources.first().getId());
-                            Map<Volume, StoragePool> storageVolMap = potentialResources.second();
-                            // remove the reused vol<->pool from destination, since
-                            // we don't have to prepare this volume.
-                            for (Volume vol : readyAndReusedVolumes) {
-                                storageVolMap.remove(vol);
-                            }
-                            DeployDestination dest = new DeployDestination(dc, pod, clusterVO, host, storageVolMap);
-                            s_logger.debug("Returning Deployment Destination: " + dest);
-                            return dest;
-                        }
-                    } else {
-                        s_logger.debug("No suitable storagePools found under this Cluster: " + clusterId);
-                    }
                 } else {
-                    s_logger.debug("No suitable hosts found under this Cluster: " + clusterId);
+                    s_logger.debug("No suitable storagePools found under this Cluster: " + clusterId);
                 }
-            }
-            else {
-                s_logger.debug("The cluster is in a disabled pod : " + pod.getId());
+            } else {
+                s_logger.debug("No suitable hosts found under this Cluster: " + clusterId);
             }
 
             if (canAvoidCluster(clusterVO, avoid, plannerAvoidOutput, vmProfile)) {

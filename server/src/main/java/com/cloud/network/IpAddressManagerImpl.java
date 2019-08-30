@@ -79,7 +79,6 @@ import com.cloud.exception.InsufficientAddressCapacityException;
 import com.cloud.exception.InsufficientCapacityException;
 import com.cloud.exception.InsufficientVirtualNetworkCapacityException;
 import com.cloud.exception.InvalidParameterValueException;
-import com.cloud.exception.PermissionDeniedException;
 import com.cloud.exception.ResourceAllocationException;
 import com.cloud.exception.ResourceUnavailableException;
 import com.cloud.host.dao.HostDao;
@@ -1138,13 +1137,6 @@ public class IpAddressManagerImpl extends ManagerBase implements IpAddressManage
 
         final VlanType vlanType = VlanType.VirtualNetwork;
         final boolean assign = false;
-
-        if (Grouping.AllocationState.Disabled == zone.getAllocationState() && !_accountMgr.isRootAdmin(caller.getId())) {
-            // zone is of type DataCenter. See DataCenterVO.java.
-            PermissionDeniedException ex = new PermissionDeniedException("Cannot perform this operation, " + "Zone is currently disabled");
-            ex.addProxyObject(zone.getUuid(), "zoneId");
-            throw ex;
-        }
 
         PublicIp ip = null;
 
