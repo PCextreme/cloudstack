@@ -16,6 +16,8 @@
 // under the License.
 package com.cloud.deploy;
 
+import org.apache.cloudstack.framework.config.ConfigKey;
+
 import com.cloud.deploy.DeploymentPlanner.ExcludeList;
 import com.cloud.exception.AffinityConflictException;
 import com.cloud.exception.InsufficientServerCapacityException;
@@ -23,6 +25,12 @@ import com.cloud.utils.component.Manager;
 import com.cloud.vm.VirtualMachineProfile;
 
 public interface DeploymentPlanningManager extends Manager {
+
+    static final ConfigKey<Boolean> sytemVmInDisabledResource = new ConfigKey<Boolean>("Advanced", Boolean.class, "system.vm.disabled.resource", "true",
+            "Allow deploying System VMs in disabled Clusters, Pods, and Zones (does not require restart)", true);
+
+    static final ConfigKey<Boolean> adminVmInDisabledResource = new ConfigKey<Boolean>("Advanced", Boolean.class, "admin.vm.disabled.resource", "false",
+            "Allow deploying VMs owned by the admin account in disabled Clusters, Pods, and Zones (does not require restart)", true);
 
     /**
      * Manages vm deployment stages: First Process Affinity/Anti-affinity - Call
@@ -33,11 +41,6 @@ public interface DeploymentPlanningManager extends Manager {
      * Lastly, Call Allocators - Given a cluster, allocators matches the
      * requirements to capabilities of the physical resource (host, storage
      * pool).
-     *
-     * @throws AffinityConflictException
-     *
-     *
-     *
      */
     DeployDestination planDeployment(VirtualMachineProfile vmProfile, DeploymentPlan plan,
             ExcludeList avoids, DeploymentPlanner planner) throws InsufficientServerCapacityException, AffinityConflictException;

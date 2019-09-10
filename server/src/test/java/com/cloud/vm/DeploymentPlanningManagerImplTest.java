@@ -34,10 +34,12 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.InjectMocks;
 import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.mockito.Spy;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.ComponentScan.Filter;
@@ -98,6 +100,7 @@ import com.cloud.storage.dao.GuestOSDao;
 import com.cloud.storage.dao.StoragePoolHostDao;
 import com.cloud.storage.dao.VolumeDao;
 import com.cloud.user.AccountManager;
+import com.cloud.user.dao.AccountDao;
 import com.cloud.utils.component.ComponentContext;
 import com.cloud.vm.dao.UserVmDao;
 import com.cloud.vm.dao.UserVmDetailsDao;
@@ -107,7 +110,8 @@ import com.cloud.vm.dao.VMInstanceDao;
 @ContextConfiguration(loader = AnnotationConfigContextLoader.class)
 public class DeploymentPlanningManagerImplTest {
 
-    @Inject
+    @Spy
+    @InjectMocks
     DeploymentPlanningManagerImpl _dpm;
 
     @Inject
@@ -142,6 +146,9 @@ public class DeploymentPlanningManagerImplTest {
 
     @Mock
     Host host;
+
+    @Inject
+    private AccountDao accountDao;
 
     private static long dataCenterId = 1L;
     private static long hostId = 1l;
@@ -179,6 +186,7 @@ public class DeploymentPlanningManagerImplTest {
         _dpm.setPlanners(planners);
 
         Mockito.when(host.getId()).thenReturn(hostId);
+        Mockito.doNothing().when(_dpm).avoidDisabledResources(vmProfile, dc, avoids);
     }
 
     @Test
@@ -445,8 +453,13 @@ public class DeploymentPlanningManagerImplTest {
         }
 
         @Bean
-        public HostGpuGroupsDao hostGpuGroupsDap() {
+        public HostGpuGroupsDao hostGpuGroupsDao() {
             return Mockito.mock(HostGpuGroupsDao.class);
+        }
+
+        @Bean
+        public AccountDao accountDao() {
+            return Mockito.mock(AccountDao.class);
         }
 
         public static class Library implements TypeFilter {

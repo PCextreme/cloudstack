@@ -48,6 +48,8 @@ import org.apache.cloudstack.engine.cloud.entity.api.db.dao.VMReservationDao;
 import org.apache.cloudstack.engine.subsystem.api.storage.DataStore;
 import org.apache.cloudstack.engine.subsystem.api.storage.DataStoreManager;
 import org.apache.cloudstack.engine.subsystem.api.storage.StoragePoolAllocator;
+import org.apache.cloudstack.framework.config.ConfigKey;
+import org.apache.cloudstack.framework.config.Configurable;
 import org.apache.cloudstack.framework.config.dao.ConfigurationDao;
 import org.apache.cloudstack.framework.messagebus.MessageBus;
 import org.apache.cloudstack.framework.messagebus.MessageSubscriber;
@@ -95,8 +97,8 @@ import com.cloud.hypervisor.Hypervisor.HypervisorType;
 import com.cloud.offering.ServiceOffering;
 import com.cloud.org.Cluster;
 import com.cloud.org.Grouping;
+import com.cloud.org.Grouping.AllocationState;
 import com.cloud.resource.ResourceManager;
-import com.cloud.resource.ResourceState;
 import com.cloud.service.ServiceOfferingDetailsVO;
 import com.cloud.service.dao.ServiceOfferingDetailsDao;
 import com.cloud.storage.DiskOfferingVO;
@@ -113,6 +115,8 @@ import com.cloud.storage.dao.GuestOSDao;
 import com.cloud.storage.dao.StoragePoolHostDao;
 import com.cloud.storage.dao.VolumeDao;
 import com.cloud.user.AccountManager;
+import com.cloud.user.AccountVO;
+import com.cloud.user.dao.AccountDao;
 import com.cloud.utils.DateUtil;
 import com.cloud.utils.NumbersUtil;
 import com.cloud.utils.Pair;
@@ -135,7 +139,7 @@ import com.cloud.vm.dao.UserVmDao;
 import com.cloud.vm.dao.VMInstanceDao;
 
 public class DeploymentPlanningManagerImpl extends ManagerBase implements DeploymentPlanningManager, Manager, Listener,
-StateListener<State, VirtualMachine.Event, VirtualMachine> {
+        StateListener<State, VirtualMachine.Event, VirtualMachine>, Configurable {
 
     private static final Logger s_logger = Logger.getLogger(DeploymentPlanningManagerImpl.class);
     @Inject
@@ -163,7 +167,10 @@ StateListener<State, VirtualMachine.Event, VirtualMachine> {
     private long _hostReservationReleasePeriod = 60L * 60L * 1000L; // one hour by default
     @Inject
     protected VMReservationDao _reservationDao;
+    @Inject
+    private AccountDao accountDao;
 
+    private static final long ADMIN_ACCOUNT_ROLE_ID = 1l;
     private static final long INITIAL_RESERVATION_RELEASE_CHECKER_DELAY = 30L * 1000L; // thirty seconds expressed in milliseconds
     protected long _nodeId = -1;
 
@@ -270,6 +277,8 @@ StateListener<State, VirtualMachine.Event, VirtualMachine> {
             s_logger.debug("Is ROOT volume READY (pool already allocated)?: " + (plan.getPoolId() != null ? "Yes" : "No"));
         }
 
+        avoidDisabledResources(vmProfile, dc, avoids);
+
         String haVmTag = (String)vmProfile.getParameter(VirtualMachineProfile.Param.HaTag);
 
         if (plan.getHostId() != null && haVmTag == null) {
@@ -289,17 +298,7 @@ StateListener<State, VirtualMachine.Event, VirtualMachine> {
                 }
 
                 Pod pod = _podDao.findById(host.getPodId());
-                // check if the cluster or the pod is disabled
-                if (pod.getAllocationState() != Grouping.AllocationState.Enabled) {
-                    s_logger.warn("The Pod containing this host is in disabled state, PodId= " + pod.getId());
-                    return null;
-                }
-
                 Cluster cluster = _clusterDao.findById(host.getClusterId());
-                if (cluster.getAllocationState() != Grouping.AllocationState.Enabled) {
-                    s_logger.warn("The Cluster containing this host is in disabled state, PodId= " + cluster.getId());
-                    return null;
-                }
 
                 if (vm.getHypervisorType() == HypervisorType.BareMetal) {
                     DeployDestination dest = new DeployDestination(dc, pod, cluster, host, new HashMap<Volume, StoragePool>());
@@ -402,7 +401,7 @@ StateListener<State, VirtualMachine.Event, VirtualMachine> {
                     s_logger.debug("The last host of this VM does not have required GPU devices available");
                 }
             } else {
-                if (host.getStatus() == Status.Up && host.getResourceState() == ResourceState.Enabled) {
+                if (host.getStatus() == Status.Up) {
                     boolean hostTagsMatch = true;
                     if(offering.getHostTag() != null){
                         _hostDao.loadHostTags(host);
@@ -546,6 +545,52 @@ StateListener<State, VirtualMachine.Event, VirtualMachine> {
         }
 
         return dest;
+    }
+
+    /**
+     * TODO
+     */
+    public void avoidDisabledResources(VirtualMachineProfile vmProfile, DataCenter dc, ExcludeList avoids) {
+        if (vmProfile.getType().isUsedBySystem() && sytemVmInDisabledResource.value()) {
+            return;
+        }
+
+        VMInstanceVO vm = _vmInstanceDao.findById(vmProfile.getId());
+        AccountVO owner = accountDao.findById(vm.getAccountId());
+        if (owner.getRoleId() == ADMIN_ACCOUNT_ROLE_ID && adminVmInDisabledResource.value()) {
+            return;
+        }
+
+        avoidDisabledDataCenters(dc, avoids);
+        avoidDisabledPods(dc, avoids);
+        avoidDisabledClusters(dc, avoids);
+        avoidDisabledHosts(dc, avoids);
+    }
+
+    private void avoidDisabledHosts(DataCenter dc, ExcludeList avoids) {
+        List<HostVO> disabledHosts = _hostDao.listDisabledByDataCenterId(dc.getId());
+        for (HostVO host : disabledHosts) {
+            avoids.addHost(host.getId());
+        }
+    }
+
+    private void avoidDisabledClusters(DataCenter dc, ExcludeList avoids) {
+        List<Long> pods = _podDao.listAllPods(dc.getId());
+        for (Long podId : pods) {
+            List<Long> disabledClusters = _clusterDao.listDisabledClusters(dc.getId(), podId);
+            avoids.addClusterList(disabledClusters);
+        }
+    }
+
+    private void avoidDisabledPods(DataCenter dc, ExcludeList avoids) {
+        List<Long> disabledPods = _podDao.listDisabledPods(dc.getId());
+        avoids.addPodList(disabledPods);
+    }
+
+    private void avoidDisabledDataCenters(DataCenter dc, ExcludeList avoids) {
+        if (dc.getAllocationState() == AllocationState.Disabled) {
+            avoids.addDataCenter(dc.getId());
+        }
     }
 
     @Override
@@ -1041,11 +1086,6 @@ StateListener<State, VirtualMachine.Event, VirtualMachine> {
         for (Long clusterId : clusterList) {
             ClusterVO clusterVO = _clusterDao.findById(clusterId);
 
-            if (clusterVO.getAllocationState() == Grouping.AllocationState.Disabled) {
-                s_logger.debug("Cannot deploy in disabled cluster " + clusterId + ", skipping this cluster");
-                avoid.addCluster(clusterVO.getId());
-            }
-
             if (clusterVO.getHypervisorType() != vmProfile.getHypervisorType()) {
                 s_logger.debug("Cluster: " + clusterId + " has HyperVisorType that does not match the VM, skipping this cluster");
                 avoid.addCluster(clusterVO.getId());
@@ -1059,7 +1099,10 @@ StateListener<State, VirtualMachine.Event, VirtualMachine> {
                     new DataCenterDeployment(plan.getDataCenterId(), clusterVO.getPodId(), clusterVO.getId(), null, plan.getPoolId(), null, plan.getReservationContext());
 
             Pod pod = _podDao.findById(clusterVO.getPodId());
-            if (pod.getAllocationState() == Grouping.AllocationState.Enabled ) {
+
+            if (CollectionUtils.isNotEmpty(avoid.getPodsToAvoid()) && avoid.getPodsToAvoid().contains(pod.getId())) {
+                s_logger.debug("The cluster is in a disabled pod : " + pod.getId());
+            } else {
                 // find suitable hosts under this cluster, need as many hosts as we
                 // get.
                 List<Host> suitableHosts = findSuitableHosts(vmProfile, potentialPlan, avoid, HostAllocator.RETURN_UPTO_ALL);
@@ -1098,9 +1141,6 @@ StateListener<State, VirtualMachine.Event, VirtualMachine> {
                 } else {
                     s_logger.debug("No suitable hosts found under this Cluster: " + clusterId);
                 }
-            }
-            else {
-                s_logger.debug("The cluster is in a disabled pod : " + pod.getId());
             }
 
             if (canAvoidCluster(clusterVO, avoid, plannerAvoidOutput, vmProfile)) {
@@ -1615,5 +1655,15 @@ StateListener<State, VirtualMachine.Event, VirtualMachine> {
         _reservationDao.expunge(sc);
       }
       return true;
+    }
+
+    @Override
+    public ConfigKey<?>[] getConfigKeys() {
+        return new ConfigKey<?>[] {sytemVmInDisabledResource, adminVmInDisabledResource};
+    }
+
+    @Override
+    public String getConfigComponentName() {
+        return DeploymentPlanningManager.class.getSimpleName();
     }
 }

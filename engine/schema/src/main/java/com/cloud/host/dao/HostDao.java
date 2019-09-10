@@ -32,7 +32,6 @@ import com.cloud.utils.fsm.StateDao;
 
 /**
  * Data Access Object for server
- *
  */
 public interface HostDao extends GenericDao<HostVO, Long>, StateDao<Status, Status.Event, Host> {
     long countBy(long clusterId, ResourceState... states);
@@ -80,6 +79,8 @@ public interface HostDao extends GenericDao<HostVO, Long>, StateDao<Status, Stat
     List<HostVO> findByClusterId(Long clusterId);
 
     List<HostVO> listByDataCenterId(long id);
+
+    List<HostVO> listDisabledByDataCenterId(long id);
 
     List<HostVO> listByDataCenterIdAndHypervisorType(long zoneId, Hypervisor.HypervisorType hypervisorType);
 
