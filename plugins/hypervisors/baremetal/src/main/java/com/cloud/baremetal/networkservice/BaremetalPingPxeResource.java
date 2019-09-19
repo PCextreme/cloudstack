@@ -156,7 +156,7 @@ public class BaremetalPingPxeResource extends BaremetalPxeResourceBase {
             }
 
             String script =
-                String.format("python /usr/bin/prepare_tftp_bootfile.py restore %1$s %2$s %3$s %4$s %5$s %6$s %7$s %8$s %9$s %10$s %11$s", _tftpDir, cmd.getMac(),
+                    String.format("python3 /usr/bin/prepare_tftp_bootfile.py restore %1$s %2$s %3$s %4$s %5$s %6$s %7$s %8$s %9$s %10$s %11$s", _tftpDir, cmd.getMac(),
                     _storageServer, _share, _dir, cmd.getTemplate(), _cifsUserName, _cifsPassword, cmd.getIp(), cmd.getNetMask(), cmd.getGateWay());
             if (!SSHCmdHelper.sshExecuteCmd(sshConnection, script)) {
                 return new PreparePxeServerAnswer(cmd, "prepare PING at " + _ip + " failed, command:" + script);
@@ -184,7 +184,7 @@ public class BaremetalPingPxeResource extends BaremetalPxeResourceBase {
             }
 
             String script =
-                String.format("python /usr/bin/prepare_tftp_bootfile.py backup %1$s %2$s %3$s %4$s %5$s %6$s %7$s %8$s %9$s %10$s %11$s", _tftpDir, cmd.getMac(),
+                    String.format("python3 /usr/bin/prepare_tftp_bootfile.py backup %1$s %2$s %3$s %4$s %5$s %6$s %7$s %8$s %9$s %10$s %11$s", _tftpDir, cmd.getMac(),
                     _storageServer, _share, _dir, cmd.getTemplate(), _cifsUserName, _cifsPassword, cmd.getIp(), cmd.getNetMask(), cmd.getGateWay());
             if (!SSHCmdHelper.sshExecuteCmd(sshConnection, script)) {
                 return new Answer(cmd, false, "prepare for creating template failed, command:" + script);

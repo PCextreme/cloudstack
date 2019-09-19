@@ -136,7 +136,7 @@ public class BaremetalKickStartPxeResource extends BaremetalPxeResourceBase {
                 throw new ConfigurationException(String.format("Cannot connect to PING PXE server(IP=%1$s, username=%2$s, password=%3$s", _ip, _username, _password));
             }
 
-            String script = String.format("python /usr/bin/baremetal_user_data.py '%s'", arg);
+            String script = String.format("python3 /usr/bin/baremetal_user_data.py '%s'", arg);
             if (!SSHCmdHelper.sshExecuteCmd(sshConnection, script)) {
                 return new Answer(cmd, false, "Failed to add user data, command:" + script);
             }
@@ -173,7 +173,7 @@ public class BaremetalKickStartPxeResource extends BaremetalPxeResourceBase {
             }
 
             String copyTo = String.format("%s/%s", _tftpDir, cmd.getTemplateUuid());
-            String script = String.format("python /usr/bin/prepare_kickstart_kernel_initrd.py %s %s %s", cmd.getKernel(), cmd.getInitrd(), copyTo);
+            String script = String.format("python3 /usr/bin/prepare_kickstart_kernel_initrd.py %s %s %s", cmd.getKernel(), cmd.getInitrd(), copyTo);
 
             if (!SSHCmdHelper.sshExecuteCmd(sshConnection, script)) {
                 return new Answer(cmd, false, "prepare kickstart at pxe server " + _ip + " failed, command:" + script);
@@ -181,8 +181,7 @@ public class BaremetalKickStartPxeResource extends BaremetalPxeResourceBase {
 
             String kernelPath = String.format("%s/vmlinuz", cmd.getTemplateUuid());
             String initrdPath = String.format("%s/initrd.img", cmd.getTemplateUuid());
-            script =
-                String.format("python /usr/bin/prepare_kickstart_bootfile.py %s %s %s %s %s %s", _tftpDir, cmd.getMac(), kernelPath, initrdPath, cmd.getKsFile(),
+            script = String.format("python3 /usr/bin/prepare_kickstart_bootfile.py %s %s %s %s %s %s", _tftpDir, cmd.getMac(), kernelPath, initrdPath, cmd.getKsFile(),
                     cmd.getMac());
             if (!SSHCmdHelper.sshExecuteCmd(sshConnection, script)) {
                 return new Answer(cmd, false, "prepare kickstart at pxe server " + _ip + " failed, command:" + script);
