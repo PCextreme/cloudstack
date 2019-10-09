@@ -20,6 +20,7 @@ package org.apache.cloudstack.storage.snapshot;
 
 import javax.inject.Inject;
 
+import org.apache.cloudstack.engine.subsystem.api.storage.SnapshotDataFactory;
 import org.apache.cloudstack.engine.subsystem.api.storage.SnapshotInfo;
 import org.apache.cloudstack.engine.subsystem.api.storage.SnapshotStrategy.SnapshotOperation;
 import org.apache.cloudstack.engine.subsystem.api.storage.StrategyPriority;
@@ -44,6 +45,8 @@ public class CephSnapshotStrategy extends StorageSystemSnapshotStrategy {
     private PrimaryDataStoreDao primaryDataStoreDao;
     @Inject
     private VolumeDao volumeDao;
+    @Inject
+    private SnapshotDataFactory snapshotDataFactory;
 
     private static final Logger s_logger = Logger.getLogger(CephSnapshotStrategy.class);
 
@@ -65,10 +68,19 @@ public class CephSnapshotStrategy extends StorageSystemSnapshotStrategy {
         }
 
         if (SnapshotOperation.DELETE.equals(op)) {
+            boolean isSnapshotBackedUpOnSecondary = isSnapshotBackedUpOnSecondaryStorage(snapshot);
+            if (isSnapshotBackedUpOnSecondary) {
+                return StrategyPriority.CANT_HANDLE;
+            }
             return StrategyPriority.HIGHEST;
         }
 
         return StrategyPriority.CANT_HANDLE;
+    }
+
+    protected boolean isSnapshotBackedUpOnSecondaryStorage(Snapshot snapshot) {
+        SnapshotInfo snapshotOnImage = snapshotDataFactory.getSnapshot(snapshot.getId(), DataStoreRole.Image);
+        return snapshotOnImage != null;
     }
 
     @Override
