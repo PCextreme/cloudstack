@@ -180,7 +180,7 @@ public class StorageSystemSnapshotStrategy extends SnapshotStrategyBase {
      * @return true if snapshot is removed; else, false
      */
     @ActionEvent(eventType = EventTypes.EVENT_SNAPSHOT_OFF_PRIMARY, eventDescription = "deleting snapshot", async = true)
-    private boolean cleanupSnapshotOnPrimaryStore(long snapshotId) {
+    protected boolean cleanupSnapshotOnPrimaryStore(long snapshotId) {
         SnapshotObject snapshotObj = (SnapshotObject)snapshotDataFactory.getSnapshot(snapshotId, DataStoreRole.Primary);
 
         if (snapshotObj == null) {

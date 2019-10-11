@@ -68,30 +68,30 @@ public class CephSnapshotStrategyTest {
         configureAndVerifyCanHandle(new Date(), false, false);
     }
 
-    @Test
-    public void canHandleTestRemovedAndSnapshotStoredOnRbd() {
-        configureAndVerifyCanHandle(null, true, false);
-    }
-
-    @Test
-    public void canHandleTestRemovedAndSnapshotStoredOnRbdBackUpSecondary() {
-        configureAndVerifyCanHandle(new Date(), true, true);
-    }
-
-    @Test
-    public void canHandleTestNotRemovedAndSnapshotStoredOnRbdBackUpSecondary() {
-        configureAndVerifyCanHandle(null, true, true);
-    }
-
-    @Test
-    public void canHandleTestNotRemovedAndSnapshotNotStoredOnRbdBackUpSecondary() {
-        configureAndVerifyCanHandle(null, false, true);
-    }
-
-    @Test
-    public void canHandleTestRemovedAndSnapshotNotStoredOnRbdBackUpSecondary() {
-        configureAndVerifyCanHandle(new Date(), false, true);
-    }
+//    @Test
+//    public void canHandleTestRemovedAndSnapshotStoredOnRbd() {
+//        configureAndVerifyCanHandle(null, true, false);
+//    }
+//
+//    @Test
+//    public void canHandleTestRemovedAndSnapshotStoredOnRbdBackUpSecondary() {
+//        configureAndVerifyCanHandle(new Date(), true, true);
+//    }
+//
+//    @Test
+//    public void canHandleTestNotRemovedAndSnapshotStoredOnRbdBackUpSecondary() {
+//        configureAndVerifyCanHandle(null, true, true);
+//    }
+//
+//    @Test
+//    public void canHandleTestNotRemovedAndSnapshotNotStoredOnRbdBackUpSecondary() {
+//        configureAndVerifyCanHandle(null, false, true);
+//    }
+//
+//    @Test
+//    public void canHandleTestRemovedAndSnapshotNotStoredOnRbdBackUpSecondary() {
+//        configureAndVerifyCanHandle(new Date(), false, true);
+//    }
 
     private void configureAndVerifyCanHandle(Date removed, boolean isSnapshotStoredOnRbdStoragePool, boolean isSnapshotBackedUpOnSecondaryStorage) {
         Snapshot snapshot = Mockito.mock(Snapshot.class);
@@ -102,7 +102,7 @@ public class CephSnapshotStrategyTest {
         Mockito.when(volumeVO.getRemoved()).thenReturn(removed);
         Mockito.when(volumeDao.findByIdIncludingRemoved(Mockito.anyLong())).thenReturn(volumeVO);
         Mockito.doReturn(isSnapshotStoredOnRbdStoragePool).when(cephSnapshotStrategy).isSnapshotStoredOnRbdStoragePool(Mockito.any());
-        Mockito.doReturn(isSnapshotBackedUpOnSecondaryStorage).when(cephSnapshotStrategy).isSnapshotBackedUpOnSecondaryStorage(Mockito.any());
+//        Mockito.doReturn(isSnapshotBackedUpOnSecondaryStorage).when(cephSnapshotStrategy).isSnapshotBackedUpOnSecondaryStorage(Mockito.any());
 
         for (int i = 0; i < snapshotOps.length - 1; i++) {
             StrategyPriority strategyPriority = cephSnapshotStrategy.canHandle(snapshot, snapshotOps[i]);
