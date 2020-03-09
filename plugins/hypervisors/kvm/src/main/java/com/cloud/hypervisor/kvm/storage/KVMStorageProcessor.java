@@ -36,7 +36,6 @@ import java.util.UUID;
 
 import javax.naming.ConfigurationException;
 
-import com.cloud.utils.Pair;
 import org.apache.cloudstack.agent.directdownload.DirectDownloadAnswer;
 import org.apache.cloudstack.agent.directdownload.DirectDownloadCommand;
 import org.apache.cloudstack.agent.directdownload.HttpDirectDownloadCommand;
@@ -115,6 +114,7 @@ import com.cloud.storage.template.Processor.FormatInfo;
 import com.cloud.storage.template.QCOW2Processor;
 import com.cloud.storage.template.TemplateLocation;
 import com.cloud.utils.NumbersUtil;
+import com.cloud.utils.Pair;
 import com.cloud.utils.exception.CloudRuntimeException;
 import com.cloud.utils.script.Script;
 import com.cloud.utils.storage.S3.S3Utils;
@@ -124,10 +124,18 @@ public class KVMStorageProcessor implements StorageProcessor {
     private final KVMStoragePoolManager storagePoolMgr;
     private final LibvirtComputingResource resource;
     private StorageLayer storageLayer;
-    private String _createTmplPath;
-    private String _manageSnapshotPath;
-    private int _cmdsTimeout;
+    private String createTmplPath;
+    private String manageSnapshotPath;
+    private int cmdsTimeout;
 
+    private static final String MANAGEMENT_SNAPSTHOT_CREATE = "-c";
+    private static final String MANAGEMENT_SNAPSTHOT_DESTROY = "-d";
+    private static final String MANAGEMENT_SNAPSTHOT_SNAPSHOT_NAME = "-n";
+    private static final String CEPH_MON_HOST = "mon_host";
+    private static final String CEPH_AUTH_KEY = "key";
+    private static final String CEPH_CLIENT_MOUNT_TIMEOUT = "client_mount_timeout";
+    private static final String CEPH_DEFAULT_MOUNT_TIMEOUT = "30";
+    
     public KVMStorageProcessor(final KVMStoragePoolManager storagePoolMgr, final LibvirtComputingResource resource) {
         this.storagePoolMgr = storagePoolMgr;
         this.resource = resource;
@@ -146,18 +154,18 @@ public class KVMStorageProcessor implements StorageProcessor {
             storageScriptsDir = getDefaultStorageScriptsDir();
         }
 
-        _createTmplPath = Script.findScript(storageScriptsDir, "createtmplt.sh");
-        if (_createTmplPath == null) {
+        createTmplPath = Script.findScript(storageScriptsDir, "createtmplt.sh");
+        if (createTmplPath == null) {
             throw new ConfigurationException("Unable to find the createtmplt.sh");
         }
 
-        _manageSnapshotPath = Script.findScript(storageScriptsDir, "managesnapshot.sh");
-        if (_manageSnapshotPath == null) {
+        manageSnapshotPath = Script.findScript(storageScriptsDir, "managesnapshot.sh");
+        if (manageSnapshotPath == null) {
             throw new ConfigurationException("Unable to find the managesnapshot.sh");
         }
 
         final String value = (String)params.get("cmds.timeout");
-        _cmdsTimeout = NumbersUtil.parseInt(value, 7200) * 1000;
+        cmdsTimeout = NumbersUtil.parseInt(value, 7200) * 1000;
         return true;
     }
 
@@ -560,7 +568,7 @@ public class KVMStorageProcessor implements StorageProcessor {
             final String templateName = UUID.randomUUID().toString();
 
             if (primary.getType() != StoragePoolType.RBD) {
-                final Script command = new Script(_createTmplPath, wait, s_logger);
+                final Script command = new Script(createTmplPath, wait, s_logger);
                 command.add("-f", disk.getPath());
                 command.add("-t", tmpltPath);
                 command.add("-n", templateName + ".qcow2");
@@ -947,9 +955,9 @@ public class KVMStorageProcessor implements StorageProcessor {
                     return new CopyCmdAnswer(e.toString());
                 }
             } else {
-                final Script command = new Script(_manageSnapshotPath, cmd.getWaitInMillSeconds(), s_logger);
+                final Script command = new Script(manageSnapshotPath, cmd.getWaitInMillSeconds(), s_logger);
                 command.add("-b", snapshotDisk.getPath());
-                command.add("-n", snapshotName);
+                command.add(MANAGEMENT_SNAPSTHOT_SNAPSHOT_NAME, snapshotName);
                 command.add("-p", snapshotDestPath);
                 if (isCreatedFromVmSnapshot) {
                     descName = UUID.randomUUID().toString();
@@ -1010,14 +1018,7 @@ public class KVMStorageProcessor implements StorageProcessor {
                         }
                     } else {
                         if (primaryPool.getType() != StoragePoolType.RBD) {
-                            final Script command = new Script(_manageSnapshotPath, _cmdsTimeout, s_logger);
-                            command.add("-d", snapshotDisk.getPath());
-                            command.add("-n", snapshotName);
-                            final String result = command.execute();
-                            if (result != null) {
-                                s_logger.debug("Failed to delete snapshot on primary: " + result);
-                                // return new CopyCmdAnswer("Failed to backup snapshot: " + result);
-                            }
+                            deleteSnapshotViaManageSnapshotScript(snapshotName, snapshotDisk);
                         }
                     }
                 } catch (final Exception ex) {
@@ -1032,6 +1033,20 @@ public class KVMStorageProcessor implements StorageProcessor {
             } catch (final Exception ex) {
                 s_logger.debug("Failed to delete secondary storage", ex);
             }
+        }
+    }
+
+    /**
+     * TODO?
+     * deleteSnapshotViaManageSnapshotScript vs deleteSnapshotOnNfsPrimaryStorage
+     */
+    private void deleteSnapshotViaManageSnapshotScript(final String snapshotName, KVMPhysicalDisk snapshotDisk) {
+        Script command = new Script(manageSnapshotPath, cmdsTimeout, s_logger);
+        command.add(MANAGEMENT_SNAPSTHOT_DESTROY, snapshotDisk.getPath());
+        command.add(MANAGEMENT_SNAPSTHOT_SNAPSHOT_NAME, snapshotName);
+        String result = command.execute();
+        if (result != null) {
+            s_logger.warn(String.format("Falied to delete snapshot (snapshot=%s) on primary storage: %s", snapshotName, result));
         }
     }
 
@@ -1495,9 +1510,9 @@ public class KVMStorageProcessor implements StorageProcessor {
                 if (primaryPool.getType() == StoragePoolType.RBD) {
                     try {
                         final Rados r = new Rados(primaryPool.getAuthUserName());
-                        r.confSet("mon_host", primaryPool.getSourceHost() + ":" + primaryPool.getSourcePort());
-                        r.confSet("key", primaryPool.getAuthSecret());
-                        r.confSet("client_mount_timeout", "30");
+                        r.confSet(CEPH_MON_HOST, primaryPool.getSourceHost() + ":" + primaryPool.getSourcePort());
+                        r.confSet(CEPH_AUTH_KEY, primaryPool.getAuthSecret());
+                        r.confSet(CEPH_CLIENT_MOUNT_TIMEOUT, CEPH_DEFAULT_MOUNT_TIMEOUT);
                         r.connect();
                         s_logger.debug("Succesfully connected to Ceph cluster at " + r.confGet("mon_host"));
 
@@ -1515,9 +1530,9 @@ public class KVMStorageProcessor implements StorageProcessor {
                     }
                 } else {
                     /* VM is not running, create a snapshot by ourself */
-                    final Script command = new Script(_manageSnapshotPath, _cmdsTimeout, s_logger);
-                    command.add("-c", disk.getPath());
-                    command.add("-n", snapshotName);
+                    final Script command = new Script(manageSnapshotPath, cmdsTimeout, s_logger);
+                    command.add(MANAGEMENT_SNAPSTHOT_CREATE, disk.getPath());
+                    command.add(MANAGEMENT_SNAPSTHOT_SNAPSHOT_NAME, snapshotName);
                     final String result = command.execute();
                     if (result != null) {
                         s_logger.debug("Failed to manage snapshot: " + result);
@@ -1624,31 +1639,10 @@ public class KVMStorageProcessor implements StorageProcessor {
             String snapshotName = snapshotFullPath.substring(snapshotFullPath.lastIndexOf("/") + 1);
             snap_full_name = disk.getName() + "@" + snapshotName;
             if (primaryPool.getType() == StoragePoolType.RBD) {
-                Rados r = new Rados(primaryPool.getAuthUserName());
-                r.confSet("mon_host", primaryPool.getSourceHost() + ":" + primaryPool.getSourcePort());
-                r.confSet("key", primaryPool.getAuthSecret());
-                r.confSet("client_mount_timeout", "30");
-                r.connect();
-                s_logger.debug("Succesfully connected to Ceph cluster at " + r.confGet("mon_host"));
-                IoCTX io = r.ioCtxCreate(primaryPool.getSourceDir());
-                Rbd rbd = new Rbd(io);
-                RbdImage image = rbd.open(disk.getName());
-                try {
-                    s_logger.info("Attempting to remove RBD snapshot " + snap_full_name);
-                    if (image.snapIsProtected(snapshotName)) {
-                        s_logger.debug("Unprotecting RBD snapshot " + snap_full_name);
-                        image.snapUnprotect(snapshotName);
-                    }
-                    image.snapRemove(snapshotName);
-                    s_logger.info("Snapshot " + snap_full_name + " successfully removed from " +
-                            primaryPool.getType().toString() + "  pool.");
-                } catch (RbdException e) {
-                    s_logger.error("Failed to remove snapshot " + snap_full_name + ", with exception: " + e.toString() +
-                        ", RBD error: " + ErrorCode.getErrorMessage(e.getReturnValue()));
-                } finally {
-                    rbd.close(image);
-                    r.ioCtxDestroy(io);
-                }
+                deleteSnapshotOnrbd(snap_full_name, snapshotTO, primaryPool, disk, snapshotName);
+            } else if (primaryPool.getType() == StoragePoolType.NetworkFilesystem) {
+                s_logger.info(String.format("Attempting to remove snapshot on primary storage (id=%s, snapshot=%s, storage type=%s)", snapshotTO.getId(), snap_full_name, primaryPool.getType()));
+                deleteSnapshotViaManageSnapshotScript(snapshotName, disk);
             } else {
                 s_logger.warn("Operation not implemented for storage pool type of " + primaryPool.getType().toString());
                 throw new InternalErrorException("Operation not implemented for storage pool type of " + primaryPool.getType().toString());
@@ -1665,6 +1659,35 @@ public class KVMStorageProcessor implements StorageProcessor {
         } catch (Exception e) {
             s_logger.error("Failed to remove snapshot " + snap_full_name + ", with exception: " + e.toString());
             return new Answer(cmd, false, "Failed to remove snapshot " + snap_full_name);
+        }
+    }
+
+    private void deleteSnapshotOnrbd(String snap_full_name, SnapshotObjectTO snapshotTO, KVMStoragePool primaryPool, KVMPhysicalDisk disk, String snapshotName)
+            throws RadosException, RbdException {
+        Rados r = new Rados(primaryPool.getAuthUserName());
+        r.confSet(CEPH_MON_HOST, primaryPool.getSourceHost() + ":" + primaryPool.getSourcePort());
+        r.confSet(CEPH_AUTH_KEY, primaryPool.getAuthSecret());
+        r.confSet(CEPH_CLIENT_MOUNT_TIMEOUT, CEPH_DEFAULT_MOUNT_TIMEOUT);
+        r.connect();
+        s_logger.debug("Succesfully connected to Ceph cluster at " + r.confGet(CEPH_MON_HOST));
+        IoCTX io = r.ioCtxCreate(primaryPool.getSourceDir());
+        Rbd rbd = new Rbd(io);
+        RbdImage image = rbd.open(disk.getName());
+        try {
+            s_logger.info(String.format("Attempting to remove snapshot (id=%s, snapshot=%s, storage type=%s)", snapshotTO.getId(), snap_full_name, primaryPool.getType()));
+            if (image.snapIsProtected(snapshotName)) {
+                s_logger.debug("Unprotecting RBD snapshot " + snap_full_name);
+                image.snapUnprotect(snapshotName);
+            }
+            image.snapRemove(snapshotName);
+            s_logger.info("Snapshot " + snap_full_name + " successfully removed from " +
+                    primaryPool.getType().toString() + "  pool.");
+        } catch (RbdException e) {
+            s_logger.error("Failed to remove snapshot " + snap_full_name + ", with exception: " + e.toString() +
+                ", RBD error: " + ErrorCode.getErrorMessage(e.getReturnValue()));
+        } finally {
+            rbd.close(image);
+            r.ioCtxDestroy(io);
         }
     }
 

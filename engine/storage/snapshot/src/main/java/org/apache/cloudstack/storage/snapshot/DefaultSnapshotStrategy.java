@@ -266,11 +266,11 @@ public class DefaultSnapshotStrategy extends SnapshotStrategyBase {
 
         boolean deletedOnSecondary = false;
         if (snapshotOnImage == null) {
-            s_logger.debug(String.format("Can't find snapshot [snapshot id: %d] on backup storage", snapshotId));
+            s_logger.debug(String.format("Can't find snapshot [snapshot id: %d] on backup storage. Looking up for snapshot on primary storage.", snapshotId));
         } else {
             SnapshotObject obj = (SnapshotObject)snapshotOnImage;
             try {
-                deletedOnSecondary = deleteSnapshotOnSecundaryStorage(snapshotId, snapshotOnImage, obj);
+                deletedOnSecondary = deleteSnapshotOnSecondaryStorage(snapshotId, snapshotOnImage, obj);
                 if (!deletedOnSecondary) {
                     s_logger.debug(
                             String.format("Failed to find/delete snapshot (id: %d) on secondary storage. Still necessary to check and delete snapshot on primary storage.",
@@ -287,8 +287,8 @@ public class DefaultSnapshotStrategy extends SnapshotStrategyBase {
         boolean deletedOnPrimary = deleteSnapshotOnPrimary(snapshotId);
         if (deletedOnPrimary) {
             s_logger.debug(String.format("Successfully deleted snapshot (id: %d) on primary storage.", snapshotId));
-        } else if (deletedOnSecondary) {
-            s_logger.debug(String.format("The snapshot was deleted on secondary storage. Could not find/delete snapshot (id: %d) on primary storage.", snapshotId));
+        } else if (!deletedOnPrimary) {
+            s_logger.debug(String.format("Could not find/delete snapshot (id: %d) on primary storage.", snapshotId));
         }
         return deletedOnSecondary || deletedOnPrimary;
     }
@@ -297,7 +297,7 @@ public class DefaultSnapshotStrategy extends SnapshotStrategyBase {
      * Deletes the snapshot on secondary storage.
      * It can return false when the snapshot was stored on primary storage and not backed up on secondary; therefore, the snapshot should also be deleted on primary storage even when this method returns false.
      */
-    private boolean deleteSnapshotOnSecundaryStorage(Long snapshotId, SnapshotInfo snapshotOnImage, SnapshotObject obj) throws NoTransitionException {
+    private boolean deleteSnapshotOnSecondaryStorage(Long snapshotId, SnapshotInfo snapshotOnImage, SnapshotObject obj) throws NoTransitionException {
         obj.processEvent(Snapshot.Event.DestroyRequested);
         List<VolumeDetailVO> volumesFromSnapshot;
         volumesFromSnapshot = _volumeDetailsDaoImpl.findDetails("SNAPSHOT_ID", String.valueOf(snapshotId), null);
