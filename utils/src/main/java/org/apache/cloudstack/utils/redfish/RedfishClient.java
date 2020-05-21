@@ -22,10 +22,17 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.UnsupportedEncodingException;
+import java.net.HttpURLConnection;
 import java.net.URISyntaxException;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyManagementException;
+import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.security.cert.CertificateException;
+import java.util.Base64;
 
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
@@ -35,19 +42,35 @@ import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 import javax.security.cert.X509Certificate;
 
+import com.cloud.utils.nio.TrustAllManager;
+import org.apache.cloudstack.utils.security.SSLUtils;
 import org.apache.commons.httpclient.HttpStatus;
 import org.apache.commons.lang.StringUtils;
 import org.apache.http.HttpResponse;
+import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.HttpClient;
+import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.utils.URIBuilder;
+import org.apache.http.config.Registry;
+import org.apache.http.config.RegistryBuilder;
+import org.apache.http.conn.socket.ConnectionSocketFactory;
+import org.apache.http.conn.socket.PlainConnectionSocketFactory;
+import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
+import org.apache.http.conn.ssl.TrustSelfSignedStrategy;
+import org.apache.http.conn.ssl.TrustStrategy;
 import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 import org.apache.http.protocol.HTTP;
+import org.apache.http.ssl.SSLContextBuilder;
+import org.apache.http.ssl.SSLContexts;
 import org.apache.log4j.Logger;
 
 import com.cloud.utils.net.NetUtils;
@@ -145,49 +168,72 @@ public class RedfishClient {
      * Executes a GET request for the given URL address.
      */
     protected HttpResponse executeGetRequest(String url) {
+        URIBuilder builder = null;
+        HttpGet httpReq = null;
+
         try {
-            URIBuilder builder = new URIBuilder(url);
-            builder.setUserInfo(username, password);
-
-            HttpGet httpReq = new HttpGet(builder.build());
+            builder = new URIBuilder(url);
+            httpReq = new HttpGet(builder.build());;
             httpReq.addHeader(ACCEPT, APPLICATION_JSON);
-
-            HttpClient client;
-            if (ignoreSsl) {
-                client = ignoreSSLCertValidator();
-            } else {
-                client = HttpClientBuilder.create().build();
-            }
-            return client.execute(httpReq);
-        } catch (URISyntaxException | IOException | KeyManagementException | NoSuchAlgorithmException e) {
-            throw new RedfishException("Failed to execute GET request URL due to exception", e);
+            String encoding = basicAuth(username, password);
+            httpReq.addHeader("Authorization", encoding);
+        } catch (URISyntaxException e) {
+            throw new RedfishException(String.format("Failed to create URI for GET request [URL: %s] due to exception:", url), e);
         }
+
+        HttpClient client = null;
+        if (ignoreSsl) {
+            try {
+                client = ignoreSSLCertValidator();
+            } catch (NoSuchAlgorithmException | KeyManagementException e) {
+                throw new RedfishException(String.format("Failed to handle SSL Cert validator on GET request [URL: %s] due to exception:", url), e);
+            }
+        } else {
+            client = HttpClientBuilder.create().build();
+        }
+        try {
+            return client.execute(httpReq);
+        } catch (IOException e) {
+            throw new RedfishException(String.format("Failed to execute GET request [URL: %s] due to exception", url), e);
+        }
+    }
+
+    private static String basicAuth(String username, String password) {
+        return "Basic " + Base64.getEncoder().encodeToString((username + ":" + password).getBytes());
     }
 
     /**
      * Executes a POST request for the given URL address and Json object.
      */
     private HttpResponse executePostRequest(String url, JsonObject jsonToSend) {
+        HttpPost httpReq = null;
         try {
             URIBuilder builder = new URIBuilder(url);
-            builder.setUserInfo(username, password);
-
-            HttpPost httpReq = new HttpPost(builder.build());
+            httpReq = new HttpPost(builder.build());
             httpReq.addHeader(ACCEPT, APPLICATION_JSON);
             httpReq.addHeader(HTTP.CONTENT_TYPE, APPLICATION_JSON);
+            String encoding = basicAuth(username, password);
+            httpReq.addHeader("Authorization", encoding);
             httpReq.setEntity(new StringEntity(jsonToSend.toString()));
+        } catch (URISyntaxException | UnsupportedEncodingException e) {
+            throw new RedfishException(String.format("Failed to create URI for POST request [URL: %s] due to exception:", url), e);
+        }
 
-            System.out.println("\nRequest: " + httpReq);
-
-            HttpClient client;
-            if (ignoreSsl) {
-                client = HttpClientBuilder.create().build();
-            } else {
+        HttpClient client = null;
+        if (ignoreSsl) {
+            try {
                 client = ignoreSSLCertValidator();
+            } catch (NoSuchAlgorithmException | KeyManagementException e) {
+                throw new RedfishException(String.format("Failed to handle SSL Cert validator on POST request [URL: %s] due to exception:", url), e);
             }
+        } else {
+            client = HttpClientBuilder.create().build();
+        }
+
+        try {
             return client.execute(httpReq);
-        } catch (URISyntaxException | IOException | KeyManagementException | NoSuchAlgorithmException e) {
-            throw new RedfishException("Failed to execute GET request URL due to exception", e);
+        } catch (IOException e) {
+            throw new RedfishException(String.format("Failed to execute POST request [URL: %s] due to exception", url), e);
         }
     }
 
@@ -334,25 +380,7 @@ public class RedfishClient {
      * Ignores SSL certififcation validator.
      */
     private CloseableHttpClient ignoreSSLCertValidator() throws NoSuchAlgorithmException, KeyManagementException {
-        TrustManager[] trustAllCerts = new TrustManager[] {new X509TrustManager() {
-            public java.security.cert.X509Certificate[] getAcceptedIssuers() {
-                return null;
-            }
-
-            public void checkClientTrusted(X509Certificate[] certs, String authType) {
-            }
-
-            public void checkServerTrusted(X509Certificate[] certs, String authType) {
-            }
-
-            @Override
-            public void checkClientTrusted(java.security.cert.X509Certificate[] chain, String authType) throws java.security.cert.CertificateException {
-            }
-
-            @Override
-            public void checkServerTrusted(java.security.cert.X509Certificate[] chain, String authType) throws java.security.cert.CertificateException {
-            }
-        }};
+        TrustManager[] trustAllCerts = new TrustManager[]{new TrustAllManager()};
 
         SSLContext sslContext = SSLContext.getInstance("SSL");
         sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
@@ -366,7 +394,6 @@ public class RedfishClient {
 
         HttpsURLConnection.setDefaultHostnameVerifier(allHostsValid);
         SSLConnectionSocketFactory socketFactory = new SSLConnectionSocketFactory(sslContext, allHostsValid);
-
         return HttpClientBuilder.create().setSSLSocketFactory(socketFactory).build();
     }
 }

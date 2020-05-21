@@ -18,17 +18,48 @@
 //
 package org.apache.cloudstack.utils.redfish;
 
+import com.cloud.utils.nio.TrustAllManager;
 import org.apache.commons.httpclient.HttpStatus;
+import org.apache.commons.httpclient.UsernamePasswordCredentials;
+import org.apache.commons.httpclient.auth.AuthScope;
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpHeaders;
 import org.apache.http.StatusLine;
+import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpUriRequest;
+import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
+import org.apache.http.impl.client.BasicCredentialsProvider;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 
-@RunWith(MockitoJUnitRunner.class)
-public class RedfishClientTest {
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSession;
+import javax.net.ssl.TrustManager;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
+import java.util.Base64;
+
+@RunWith(MockitoJUnitRunner.class) public class RedfishClientTest {
 
     private static final String USERNAME = "user";
     private static final String PASSWORD = "password";
@@ -62,7 +93,7 @@ public class RedfishClientTest {
     @Test
     public void validateAddressAndPrepareForUrlTestIpv6() {
         String ipv6 = "100::ffff:ffff:ffff:ffff";
-        String expected = "["+ipv6+"]";
+        String expected = "[" + ipv6 + "]";
         String result = redfishClientspy.validateAddressAndPrepareForUrl(ipv6);
         Assert.assertEquals(expected, result);
     }
@@ -71,7 +102,7 @@ public class RedfishClientTest {
     public void buildRequestUrlTestHttpsGetSystemId() {
         RedfishClient redfishclient = new RedfishClient(USERNAME, PASSWORD, true, false);
         String result = redfishclient.buildRequestUrl(oobAddress, RedfishClient.RedfishCmdType.GetSystemId, systemId);
-        String expected = String.format("https://%s/redfish/v1/Systems/",oobAddress, systemId);
+        String expected = String.format("https://%s/redfish/v1/Systems/", oobAddress, systemId);
         Assert.assertEquals(expected, result);
     }
 
@@ -79,7 +110,7 @@ public class RedfishClientTest {
     public void buildRequestUrlTestGetSystemId() {
         RedfishClient redfishclient = new RedfishClient(USERNAME, PASSWORD, false, false);
         String result = redfishclient.buildRequestUrl(oobAddress, RedfishClient.RedfishCmdType.GetSystemId, systemId);
-        String expected = String.format("http://%s/redfish/v1/Systems/",oobAddress, systemId);
+        String expected = String.format("http://%s/redfish/v1/Systems/", oobAddress, systemId);
         Assert.assertEquals(expected, result);
     }
 
@@ -87,7 +118,7 @@ public class RedfishClientTest {
     public void buildRequestUrlTestHttpsComputerSystemReset() {
         RedfishClient redfishclient = new RedfishClient(USERNAME, PASSWORD, true, false);
         String result = redfishclient.buildRequestUrl(oobAddress, RedfishClient.RedfishCmdType.ComputerSystemReset, systemId);
-        String expected = String.format("https://%s/redfish/v1/Systems/%s%s",oobAddress, systemId,COMPUTER_SYSTEM_RESET_URL_PATH);
+        String expected = String.format("https://%s/redfish/v1/Systems/%s%s", oobAddress, systemId, COMPUTER_SYSTEM_RESET_URL_PATH);
         Assert.assertEquals(expected, result);
     }
 
@@ -95,7 +126,7 @@ public class RedfishClientTest {
     public void buildRequestUrlTestComputerSystemReset() {
         RedfishClient redfishclient = new RedfishClient(USERNAME, PASSWORD, false, false);
         String result = redfishclient.buildRequestUrl(oobAddress, RedfishClient.RedfishCmdType.ComputerSystemReset, systemId);
-        String expected = String.format("http://%s/redfish/v1/Systems/%s%s",oobAddress, systemId,COMPUTER_SYSTEM_RESET_URL_PATH);
+        String expected = String.format("http://%s/redfish/v1/Systems/%s%s", oobAddress, systemId, COMPUTER_SYSTEM_RESET_URL_PATH);
         Assert.assertEquals(expected, result);
     }
 
@@ -103,7 +134,7 @@ public class RedfishClientTest {
     public void buildRequestUrlTestHttpsGetPowerState() {
         RedfishClient redfishclient = new RedfishClient(USERNAME, PASSWORD, true, false);
         String result = redfishclient.buildRequestUrl(oobAddress, RedfishClient.RedfishCmdType.GetPowerState, systemId);
-        String expected = String.format("https://%s/redfish/v1/Systems/%s",oobAddress, systemId);
+        String expected = String.format("https://%s/redfish/v1/Systems/%s", oobAddress, systemId);
         Assert.assertEquals(expected, result);
     }
 
@@ -111,7 +142,7 @@ public class RedfishClientTest {
     public void buildRequestUrlTestGetPowerState() {
         RedfishClient redfishclient = new RedfishClient(USERNAME, PASSWORD, false, false);
         String result = redfishclient.buildRequestUrl(oobAddress, RedfishClient.RedfishCmdType.GetPowerState, systemId);
-        String expected = String.format("http://%s/redfish/v1/Systems/%s",oobAddress, systemId);
+        String expected = String.format("http://%s/redfish/v1/Systems/%s", oobAddress, systemId);
         Assert.assertEquals(expected, result);
     }
 
