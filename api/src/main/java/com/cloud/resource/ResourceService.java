@@ -39,6 +39,15 @@ import com.cloud.host.Host;
 import com.cloud.hypervisor.Hypervisor.HypervisorType;
 import com.cloud.org.Cluster;
 import com.cloud.utils.fsm.NoTransitionException;
+import org.apache.cloudstack.api.command.admin.host.AddHostCmd;
+import org.apache.cloudstack.api.command.admin.host.AddSecondaryStorageCmd;
+import org.apache.cloudstack.api.command.admin.host.CancelMaintenanceCmd;
+import org.apache.cloudstack.api.command.admin.host.ReconnectHostCmd;
+import org.apache.cloudstack.api.command.admin.host.UpdateHostCmd;
+import org.apache.cloudstack.api.command.admin.host.UpdateHostPasswordCmd;
+import org.apache.cloudstack.api.command.admin.host.PrepareForMaintenanceCmd;
+import org.apache.cloudstack.api.command.admin.host.DeclareHostAsDeadCmd;
+import org.apache.cloudstack.api.command.admin.host.CancelHostAsDeadCmd;
 
 public interface ResourceService {
     /**
@@ -68,11 +77,13 @@ public interface ResourceService {
 
     Host maintain(PrepareForMaintenanceCmd cmd);
 
-    Host declareHostAsDead(DeclareHostAsDeadCmd cmd);
+    Host declareHostAsDead(DeclareHostAsDeadCmd cmd) throws NoTransitionException;
+
+    Host cancelHostAsDead(CancelHostAsDeadCmd cmd) throws NoTransitionException;
 
     /**
      * Deletes a host
-     * @param true if deleted, false otherwise
+     * @return true if deleted, false otherwise
      */
     boolean deleteHost(long hostId, boolean isForced, boolean isForceDeleteStorage);
 
