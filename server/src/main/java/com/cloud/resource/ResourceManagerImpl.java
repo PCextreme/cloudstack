@@ -37,8 +37,8 @@ import org.apache.cloudstack.api.command.admin.cluster.UpdateClusterCmd;
 import org.apache.cloudstack.api.command.admin.host.AddHostCmd;
 import org.apache.cloudstack.api.command.admin.host.AddSecondaryStorageCmd;
 import org.apache.cloudstack.api.command.admin.host.CancelMaintenanceCmd;
-import org.apache.cloudstack.api.command.admin.host.DeclareHostAsDeadCmd;
 import org.apache.cloudstack.api.command.admin.host.PrepareForMaintenanceCmd;
+import org.apache.cloudstack.api.command.admin.host.DeclareHostAsDeadCmd;
 import org.apache.cloudstack.api.command.admin.host.ReconnectHostCmd;
 import org.apache.cloudstack.api.command.admin.host.UpdateHostCmd;
 import org.apache.cloudstack.api.command.admin.host.UpdateHostPasswordCmd;
@@ -1352,7 +1352,7 @@ public class ResourceManagerImpl extends ManagerBase implements ResourceManager,
      */
     @Override
     public Host declareHostAsDead(final DeclareHostAsDeadCmd cmd) throws NoTransitionException {
-        Long hostId = cmd.getHostId();
+        Long hostId = cmd.getId();
         HostVO host = _hostDao.findById(hostId);
 
         if (host == null || host.getRemoved() != null) {
@@ -1365,7 +1365,7 @@ public class ResourceManagerImpl extends ManagerBase implements ResourceManager,
 
         if (host.getStatus() != Status.Alert && host.getStatus() != Status.Disconnected) {
             throw new InvalidParameterValueException(
-                    String.format("Cannot perform declareHostAsDead on host [id=%s, name=%s] when host is in %s status", host.getId(), host.getName(), host.getStatus()));
+                    String.format("Cannot perform declare host [id=%s, name=%s] as 'Dead' when host is in %s status", host.getId(), host.getName(), host.getStatus()));
         }
 
         try {
@@ -1373,11 +1373,31 @@ public class ResourceManagerImpl extends ManagerBase implements ResourceManager,
             host.setResourceState(ResourceState.Dead);
         } catch (NoTransitionException e) {
             s_logger.error(String.format("Cannot transmit host [id:%s, name:%s, state:%s, status:%s] to %s state", host.getId(), host.getName(), host.getState(), host.getStatus(),
-                    ResourceState.Event.DeclareHostDead));
+                    ResourceState.Event.DeclareHostDead), e);
             throw e;
         }
 
+        scheduleVmsRestart(hostId);
+
         return host;
+    }
+
+    /**
+     * This method assumes that the host is dead; therefore it schedule VMs to be re-started by the HA manager.
+     */
+    private void scheduleVmsRestart(Long hostId) {
+        List<VMInstanceVO> allVmsOnHost = _vmDao.listByHostId(hostId);
+        if (CollectionUtils.isEmpty(allVmsOnHost)) {
+            s_logger.debug(String.format("Host [id=%s] has no allocated VMs marking host as Dead.", hostId));
+        }
+
+        s_logger.debug(String.format("Host [id=%s] has a total of %s allocated VMs. Triggering HA to start VMs that have HA enabled.", hostId, allVmsOnHost.size()));
+        for (VMInstanceVO vm : allVmsOnHost) {
+            State vmState = vm.getState();
+            if (vmState == State.Starting || vmState == State.Running || vmState == State.Stopping) {
+                _haMgr.scheduleRestart(vm, false);
+            }
+        }
     }
 
     /**
@@ -1385,7 +1405,7 @@ public class ResourceManagerImpl extends ManagerBase implements ResourceManager,
      */
     @Override
     public Host cancelHostAsDead(final CancelHostAsDeadCmd cmd) throws NoTransitionException {
-        Long hostId = cmd.getHostId();
+        Long hostId = cmd.getId();
         HostVO host = _hostDao.findById(hostId);
 
         if (host == null || host.getRemoved() != null) {
@@ -1401,7 +1421,7 @@ public class ResourceManagerImpl extends ManagerBase implements ResourceManager,
             resourceStateTransitTo(host, ResourceState.Event.EnableDeadHost, _nodeId);
             host.setResourceState(ResourceState.Enabled);
         } catch (NoTransitionException e) {
-            s_logger.debug(
+            s_logger.error(
                     String.format("Cannot transmit host [id=%s, name=%s, state=%s, status=%s] to %s state", host.getId(), host.getName(), host.getResourceState(), host.getStatus(),
                             ResourceState.Enabled), e);
         }
