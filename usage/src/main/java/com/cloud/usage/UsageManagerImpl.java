@@ -16,6 +16,7 @@
 // under the License.
 package com.cloud.usage;
 
+import java.lang.management.ManagementFactory;
 import java.net.InetAddress;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -276,7 +277,9 @@ public class UsageManagerImpl extends ManagerBase implements UsageManager, Runna
             s_logger.error("Unhandled exception configuring UsageManger", e);
             throw new ConfigurationException("Unhandled exception configuring UsageManager " + e.toString());
         }
-        _pid = Integer.parseInt(System.getProperty("pid"));
+//        _pid = Integer.parseInt(System.getProperty("pid"));
+        String processName = ManagementFactory.getRuntimeMXBean().getName();
+        _pid = Integer.parseInt(processName.split("@")[0]);
         return true;
     }
 
