@@ -253,20 +253,39 @@ public class Networks {
                 Long.parseLong(candidate);
                 return Vlan.toUri(candidate);
             } catch (NumberFormatException nfe) {
-                if (com.cloud.dc.Vlan.UNTAGGED.equalsIgnoreCase(candidate)) {
-                    return Native.toUri(candidate);
+                return getVlanUriWhenNumberFormatException(candidate);
+            }
+        }
+
+        /**
+         * TODO
+         */
+        private static URI getVlanUriWhenNumberFormatException(String candidate) {
+            if (com.cloud.dc.Vlan.UNTAGGED.equalsIgnoreCase(candidate)) {
+                return Native.toUri(candidate);
+            }
+            try {
+                URI uri = new URI(candidate);
+                BroadcastDomainType tiep = getSchemeValue(uri);
+                if (tiep.scheme != null && tiep.scheme.equals(uri.getScheme())) {
+                    return uri;
+                } else {
+                    throw new CloudRuntimeException("string '" + candidate + "' has an unknown BroadcastDomainType.");
                 }
-                try {
-                    URI uri = new URI(candidate);
-                    BroadcastDomainType tiep = getSchemeValue(uri);
-                    if (tiep.scheme != null && tiep.scheme.equals(uri.getScheme())) {
-                        return uri;
-                    } else {
-                        throw new CloudRuntimeException("string '" + candidate + "' has an unknown BroadcastDomainType.");
-                    }
-                } catch (URISyntaxException e) {
-                    throw new CloudRuntimeException("string is not a broadcast URI: " + candidate);
-                }
+            } catch (URISyntaxException e) {
+                throw new CloudRuntimeException("string is not a broadcast URI: " + candidate);
+            }
+        }
+
+        /**
+         * Encodes a string into a BroadcastUri, according to the given BroadcastDomainType
+         */
+        public static URI encodeStringIntoBroadcastUri(String candidate, BroadcastDomainType isolationMethod) {
+            try{
+                Long.parseLong(candidate);
+                return isolationMethod.toUri(candidate);
+            } catch (NumberFormatException nfe) {
+                return getVlanUriWhenNumberFormatException(candidate);
             }
         }
     };
