@@ -1349,6 +1349,8 @@ public class StatsCollector extends ManagerBase implements ComponentMethodInterc
                 points.add(vmPoint);
             }
             writeBatches(influxDbConnection, databaseName, points);
+
+            influxDbConnection.close();
         }
 
         /**
@@ -1521,7 +1523,9 @@ public class StatsCollector extends ManagerBase implements ComponentMethodInterc
      */
     protected void writeBatches(InfluxDB influxDbConnection, String dbName, List<Point> points) {
         BatchPoints batchPoints = BatchPoints.database(dbName).build();
-        influxDbConnection.enableBatch(BatchOptions.DEFAULTS);
+        if(!influxDbConnection.isBatchEnabled()){
+            influxDbConnection.enableBatch(BatchOptions.DEFAULTS);
+        }
 
         for (Point point : points) {
             batchPoints.point(point);
