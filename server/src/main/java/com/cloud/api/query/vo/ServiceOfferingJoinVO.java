@@ -67,6 +67,9 @@ public class ServiceOfferingJoinVO extends BaseViewVO implements InternalIdentit
     @Column(name = "ram_size")
     private Integer ramSize;
 
+    @Column(name = "root_disk_size")
+    private Long rootDiskSize;
+
     @Column(name = "nw_rate")
     private Integer rateMbps;
 
@@ -278,6 +281,10 @@ public class ServiceOfferingJoinVO extends BaseViewVO implements InternalIdentit
 
     public Integer getRamSize() {
         return ramSize;
+    }
+
+    public Long getRootDiskSize() {
+        return rootDiskSize;
     }
 
     public Integer getRateMbps() {

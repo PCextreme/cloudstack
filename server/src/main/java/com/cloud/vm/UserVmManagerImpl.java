@@ -561,6 +561,9 @@ public class UserVmManagerImpl extends ManagerBase implements UserVmManager, Vir
     private static final ConfigKey<Boolean> VmDestroyForcestop = new ConfigKey<Boolean>("Advanced", Boolean.class, "vm.destroy.forcestop", "false",
             "On destroy, force-stop takes this value ", true);
 
+    private static final ConfigKey<Boolean> SET_ROOT_DISK_SIZE_BY_SERVICE_OFFERING = new ConfigKey<Boolean>("Advanced", Boolean.class, "root.size.by.service.offering", "false",
+            "When set to true, the Root disk size will be configured accordingly to the Service Offering overwriting custom root size. If set to false, then Users can configure custom Root disk even if the Service Offering has a Root disk size configured.", true);
+
     @Override
     public UserVmVO getVirtualMachine(long vmId) {
         return _vmDao.findById(vmId);
@@ -576,6 +579,7 @@ public class UserVmManagerImpl extends ManagerBase implements UserVmManager, Vir
         _resourceLimitMgr.checkResourceLimit(owner, ResourceType.cpu, displayVm, cpu);
         _resourceLimitMgr.checkResourceLimit(owner, ResourceType.memory, displayVm, memory);
     }
+
 
     protected void resourceCountIncrement(long accountId, Boolean displayVm, Long cpu, Long memory) {
         if (! VirtualMachineManager.ResoureCountRunningVMsonly.value()) {
@@ -3464,26 +3468,11 @@ public class UserVmManagerImpl extends ManagerBase implements UserVmManager, Vir
         }
         // check if account/domain is with in resource limits to create a new vm
         boolean isIso = Storage.ImageFormat.ISO == template.getFormat();
-        long size = 0;
-        // custom root disk size, resizes base template to larger size
-        if (customParameters.containsKey(VmDetailConstants.ROOT_DISK_SIZE)) {
-            // only KVM, XenServer and VMware supports rootdisksize override
-            if (!(hypervisorType == HypervisorType.KVM || hypervisorType == HypervisorType.XenServer || hypervisorType == HypervisorType.VMware || hypervisorType == HypervisorType.Simulator)) {
-                throw new InvalidParameterValueException("Hypervisor " + hypervisorType + " does not support rootdisksize override");
-            }
 
-            Long rootDiskSize = NumbersUtil.parseLong(customParameters.get(VmDetailConstants.ROOT_DISK_SIZE), -1);
-            if (rootDiskSize <= 0) {
-                throw new InvalidParameterValueException("Root disk size should be a positive number.");
-            }
-            size = rootDiskSize * GiB_TO_BYTES;
-        } else {
-            // For baremetal, size can be null
-            Long templateSize = _templateDao.findById(template.getId()).getSize();
-            if (templateSize != null) {
-                size = templateSize;
-            }
-        }
+        configureCustomParametersRootDiskViaServiceOffering(customParameters, offering);
+
+        long size = configureCustomRootDiskSize(customParameters, template, hypervisorType);
+
         if (diskOfferingId != null) {
             DiskOfferingVO diskOffering = _diskOfferingDao.findById(diskOfferingId);
             if (diskOffering != null && diskOffering.isCustomized()) {
@@ -3796,6 +3785,53 @@ public class UserVmManagerImpl extends ManagerBase implements UserVmManager, Vir
 
         CallContext.current().putContextParameter(VirtualMachine.class, vm.getUuid());
         return vm;
+    }
+
+    /**
+     * Configures the Root disk size via VM`s custom parameters based on the Servivce Offering root disk size, if the offering has it configured.
+     */
+    protected void configureCustomParametersRootDiskViaServiceOffering(Map<String, String> customParameters, ServiceOfferingVO offering) {
+        if (offering.getRootDiskSize() != null && offering.getRootDiskSize() > 0) {
+            boolean containsKey = customParameters.containsKey(VmDetailConstants.ROOT_DISK_SIZE);
+            if (isServiceOfferingOverwritingCustomRootDiskSize() || !containsKey) {
+                customParameters.put(VmDetailConstants.ROOT_DISK_SIZE, offering.getRootDiskSize().toString());
+            }
+        }
+    }
+
+    protected Boolean isServiceOfferingOverwritingCustomRootDiskSize() {
+        //This method was created to easily mock the respective static ConfigKey value in Unit test methods without the need of Powermockito or Reflection
+        return SET_ROOT_DISK_SIZE_BY_SERVICE_OFFERING.value();
+    }
+
+    protected long configureCustomRootDiskSize(Map<String, String> customParameters, VMTemplateVO template, HypervisorType hypervisorType) {
+        // custom root disk size, resizes base template to larger size
+        if (customParameters.containsKey(VmDetailConstants.ROOT_DISK_SIZE)) {
+            verifyIfHypervisorSupportsRootdiskSizeOverride(hypervisorType);
+
+            Long rootDiskSize = NumbersUtil.parseLong(customParameters.get(VmDetailConstants.ROOT_DISK_SIZE), -1);
+            if (rootDiskSize <= 0) {
+                throw new InvalidParameterValueException("Root disk size should be a positive number.");
+            }
+            return rootDiskSize * GiB_TO_BYTES;
+        } else {
+            // For baremetal, size can be null
+            Long templateSize = _templateDao.findById(template.getId()).getSize();
+            if (templateSize != null) {
+                return templateSize;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Only KVM, XenServer and VMware supports rootdisksize override
+     * @throws InvalidParameterValueException if the hypervisor does not support rootdisksize override
+     */
+    protected void verifyIfHypervisorSupportsRootdiskSizeOverride(HypervisorType hypervisorType) {
+        if (!(hypervisorType == HypervisorType.KVM || hypervisorType == HypervisorType.XenServer || hypervisorType == HypervisorType.VMware || hypervisorType == HypervisorType.Simulator)) {
+            throw new InvalidParameterValueException("Hypervisor " + hypervisorType + " does not support rootdisksize override");
+        }
     }
 
     private void checkIfHostNameUniqueInNtwkDomain(String hostName, List<? extends Network> networkList) {
@@ -7003,7 +7039,7 @@ public class UserVmManagerImpl extends ManagerBase implements UserVmManager, Vir
     public ConfigKey<?>[] getConfigKeys() {
         return new ConfigKey<?>[] {EnableDynamicallyScaleVm, AllowUserExpungeRecoverVm, VmIpFetchWaitInterval, VmIpFetchTrialMax,
                 VmIpFetchThreadPoolMax, VmIpFetchTaskWorkers, AllowDeployVmIfGivenHostFails, EnableAdditionalVmConfig, DisplayVMOVFProperties,
-                KvmAdditionalConfigAllowList, XenServerAdditionalConfigAllowList, VmwareAdditionalConfigAllowList};
+                KvmAdditionalConfigAllowList, XenServerAdditionalConfigAllowList, VmwareAdditionalConfigAllowList, SET_ROOT_DISK_SIZE_BY_SERVICE_OFFERING};
     }
 
     @Override

@@ -132,6 +132,10 @@ public class ServiceOfferingResponse extends BaseResponse {
     @Param(description = "Hypervisor snapshot reserve space as a percent of a volume (for managed storage using Xen or VMware)", since = "4.4")
     private Integer hypervisorSnapshotReserve;
 
+    @SerializedName(ApiConstants.ROOT_DISK_SIZE)
+    @Param(description = "Root disk size in GB")
+    private Long rootDiskSize;
+
     @SerializedName("diskBytesReadRate")
     @Param(description = "bytes read rate of the service offering")
     private Long bytesReadRate;
@@ -409,6 +413,10 @@ public class ServiceOfferingResponse extends BaseResponse {
 
     public void setHypervisorSnapshotReserve(Integer hypervisorSnapshotReserve) {
         this.hypervisorSnapshotReserve = hypervisorSnapshotReserve;
+    }
+
+    public void setRootDiskSize(Long rootDiskSize) {
+        this.rootDiskSize = rootDiskSize;
     }
 
     public void setBytesReadRate(Long bytesReadRate) {

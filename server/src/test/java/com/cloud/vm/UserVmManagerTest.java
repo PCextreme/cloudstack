@@ -222,6 +222,10 @@ public class UserVmManagerTest {
     @Mock
     private NetworkOrchestrationService _networkMgr;
 
+    private static final long GiB_TO_BYTES = 1024 * 1024 * 1024;
+
+    private Map<String, String> customParameters = new HashMap<>();
+
     @Before
     public void setup() {
         doReturn(8L).when(_vmMock).getAccountId();
@@ -233,6 +237,7 @@ public class UserVmManagerTest {
 
         List<VMSnapshotVO> mockList = new ArrayList<>();
 
+        customParameters.put(VmDetailConstants.ROOT_DISK_SIZE, "123");
     }
 
     @Test
@@ -866,5 +871,145 @@ public class UserVmManagerTest {
         // Verify that we accept both but return the padded version
         assertEquals("validate return the value with padding", encodedUserdata, _userVmMgr.validateUserData(encodedUserdata, BaseCmd.HTTPMethod.GET));
         assertEquals("validate return the value with padding", encodedUserdata, _userVmMgr.validateUserData(urlEncodedUserdata, BaseCmd.HTTPMethod.GET));
+    }
+
+    @Test
+    public void configureCustomParametersRootDiskViaServiceOfferingTestEmptyCustomParameters() {
+        long expectedRootDiskSize = 10l;
+        Long offeringRootDiskSize = 10L;
+        Map<String, String> customParameters = new HashMap<>();
+        prepareAndRunConfigureCustomParametersRootDiskViaServiceOfferingTest(expectedRootDiskSize, offeringRootDiskSize, customParameters, true, 1);
+    }
+
+    @Test
+    public void configureCustomParametersRootDiskViaServiceOfferingTestNullServiceOffering() {
+        long expectedRootDiskSize = 123l;
+        Long offeringRootDiskSize = null;
+        prepareAndRunConfigureCustomParametersRootDiskViaServiceOfferingTest(expectedRootDiskSize, offeringRootDiskSize, customParameters, true, 0);
+    }
+
+    @Test
+    public void configureCustomParametersRootDiskViaServiceOfferingTestZeroServiceOffering() {
+        long expectedRootDiskSize = 123l;
+        Long offeringRootDiskSize = 0L;
+        prepareAndRunConfigureCustomParametersRootDiskViaServiceOfferingTest(expectedRootDiskSize, offeringRootDiskSize, customParameters, true, 0);
+    }
+
+    @Test
+    public void configureCustomParametersRootDiskViaServiceOfferingTestNegativeServiceOffering() {
+        long expectedRootDiskSize = 123l;
+        Long offeringRootDiskSize = -1L;
+        prepareAndRunConfigureCustomParametersRootDiskViaServiceOfferingTest(expectedRootDiskSize, offeringRootDiskSize, customParameters, true, 0);
+    }
+
+    @Test
+    public void configureCustomParametersRootDiskViaServiceOfferingTestExpectRootSizeFromCustomParameters() {
+        long expectedRootDiskSize = 123l;
+        Long offeringRootDiskSize = null;
+        Map<String, String> customParameters = new HashMap<>();
+        customParameters.put(VmDetailConstants.ROOT_DISK_SIZE, "123");
+        prepareAndRunConfigureCustomParametersRootDiskViaServiceOfferingTest(expectedRootDiskSize, offeringRootDiskSize, customParameters, false, 0);
+    }
+
+    @Test
+    public void configureCustomParametersRootDiskViaServiceOfferingTestCustomParametersNotNull() {
+        long expectedRootDiskSize = 10l;
+        Long offeringRootDiskSize = 10L;
+        prepareAndRunConfigureCustomParametersRootDiskViaServiceOfferingTest(expectedRootDiskSize, offeringRootDiskSize, customParameters, true, 1);
+    }
+
+    private void prepareAndRunConfigureCustomParametersRootDiskViaServiceOfferingTest(long expectedRootDiskSize, Long offeringRootDiskSize, Map<String, String> customParameters, boolean isOfferingOverwritingCustomRootSize, int timesVerify) {
+        ServiceOfferingVO offering = Mockito.mock(ServiceOfferingVO.class);
+        Mockito.when(offering.getRootDiskSize()).thenReturn(offeringRootDiskSize);
+        Mockito.when(_userVmMgr.isServiceOfferingOverwritingCustomRootDiskSize()).thenReturn(isOfferingOverwritingCustomRootSize);
+
+        _userVmMgr.configureCustomParametersRootDiskViaServiceOffering(customParameters, offering);
+
+        Long rootDiskSize = Long.parseLong(customParameters.get(VmDetailConstants.ROOT_DISK_SIZE));
+        Assert.assertTrue(rootDiskSize.longValue() == expectedRootDiskSize);
+        Mockito.verify(_userVmMgr, Mockito.times(timesVerify)).isServiceOfferingOverwritingCustomRootDiskSize();
+    }
+
+    @Test
+    public void configureCustomRootDiskSizeTest() {
+        String vmDetailsRootDiskSize = "123";
+        Map<String, String> customParameters = new HashMap<>();
+        customParameters.put(VmDetailConstants.ROOT_DISK_SIZE, vmDetailsRootDiskSize);
+        long expectedRootDiskSize = 123l * GiB_TO_BYTES;
+        long templateSize = 999L;
+        prepareAndRunConfigureCustomRootDiskSizeTest(customParameters, expectedRootDiskSize, templateSize, 1);
+    }
+
+    @Test(expected = InvalidParameterValueException.class)
+    public void configureCustomRootDiskSizeTestExpectExceptionZero() {
+        String vmDetailsRootDiskSize = "0";
+        Map<String, String> customParameters = new HashMap<>();
+        customParameters.put(VmDetailConstants.ROOT_DISK_SIZE, vmDetailsRootDiskSize);
+        long expectedRootDiskSize = 0l;
+        long templateSize = 999L;
+        prepareAndRunConfigureCustomRootDiskSizeTest(customParameters, expectedRootDiskSize, templateSize, 1);
+    }
+
+    @Test(expected = InvalidParameterValueException.class)
+    public void configureCustomRootDiskSizeTestExpectExceptionNegativeNum() {
+        String vmDetailsRootDiskSize = "-123";
+        Map<String, String> customParameters = new HashMap<>();
+        customParameters.put(VmDetailConstants.ROOT_DISK_SIZE, vmDetailsRootDiskSize);
+        long expectedRootDiskSize = -123l * GiB_TO_BYTES;
+        long templateSize = 999L;
+        prepareAndRunConfigureCustomRootDiskSizeTest(customParameters, expectedRootDiskSize, templateSize, 1);
+    }
+
+    @Test
+    public void configureCustomRootDiskSizeTestEmptyParameters() {
+        Map<String, String> customParameters = new HashMap<>();
+        long expectedRootDiskSize = 999l * GiB_TO_BYTES;
+        long templateSize = 999L * GiB_TO_BYTES;
+        prepareAndRunConfigureCustomRootDiskSizeTest(customParameters, expectedRootDiskSize, templateSize, 0);
+    }
+
+    @Test
+    public void configureCustomRootDiskSizeTestEmptyParametersAndTemplateSizeZero() {
+        Map<String, String> customParameters = new HashMap<>();
+        long expectedRootDiskSize = 0l;
+        long templateSize = 0L;
+        prepareAndRunConfigureCustomRootDiskSizeTest(customParameters, expectedRootDiskSize, templateSize, 0);
+    }
+
+    private void prepareAndRunConfigureCustomRootDiskSizeTest(Map<String, String> customParameters, long expectedRootDiskSize, long templateSize, int timesVerifyIfHypervisorSupports) {
+        VMTemplateVO template = Mockito.mock(VMTemplateVO.class);
+        Mockito.when(template.getId()).thenReturn(1l);
+        Mockito.when(template.getSize()).thenReturn(templateSize);
+
+        Mockito.when(_templateDao.findById(Mockito.anyLong())).thenReturn(template);
+
+        long rootDiskSize = _userVmMgr.configureCustomRootDiskSize(customParameters, template, HypervisorType.KVM);
+
+        Assert.assertEquals(expectedRootDiskSize, rootDiskSize);
+        Mockito.verify(_userVmMgr, Mockito.times(timesVerifyIfHypervisorSupports)).verifyIfHypervisorSupportsRootdiskSizeOverride(Mockito.any());
+    }
+
+    @Test
+    public void verifyIfHypervisorSupportRootdiskSizeOverrideTest() {
+        HypervisorType[] hypervisorTypeArray = HypervisorType.values();
+        int exceptionCounter = 0;
+        int expectedExceptionCounter = hypervisorTypeArray.length - 4;
+
+        for(int i = 0; i < hypervisorTypeArray.length; i++) {
+            if (HypervisorType.KVM == hypervisorTypeArray[i]
+                    || HypervisorType.XenServer == hypervisorTypeArray[i]
+                    || HypervisorType.VMware == hypervisorTypeArray[i]
+                    || HypervisorType.Simulator == hypervisorTypeArray[i]) {
+                _userVmMgr.verifyIfHypervisorSupportsRootdiskSizeOverride(hypervisorTypeArray[i]);
+            } else {
+                try {
+                    _userVmMgr.verifyIfHypervisorSupportsRootdiskSizeOverride(hypervisorTypeArray[i]);
+                } catch (InvalidParameterValueException e) {
+                    exceptionCounter ++;
+                }
+            }
+        }
+
+        Assert.assertEquals(expectedExceptionCounter, exceptionCounter);
     }
 }

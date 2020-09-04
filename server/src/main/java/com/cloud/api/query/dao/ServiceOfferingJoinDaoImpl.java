@@ -70,6 +70,7 @@ public class ServiceOfferingJoinDaoImpl extends GenericDaoBase<ServiceOfferingJo
         offeringResponse.setCpuNumber(offering.getCpu());
         offeringResponse.setCpuSpeed(offering.getSpeed());
         offeringResponse.setMemory(offering.getRamSize());
+        offeringResponse.setRootDiskSize(offering.getRootDiskSize());
         offeringResponse.setCreated(offering.getCreated());
         offeringResponse.setStorageType(offering.isUseLocalStorage() ? ServiceOffering.StorageType.local.toString() : ServiceOffering.StorageType.shared.toString());
         offeringResponse.setOfferHa(offering.isOfferHA());

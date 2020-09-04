@@ -72,6 +72,9 @@ public class ServiceOfferingVO extends DiskOfferingVO implements ServiceOffering
     @Column(name = "sort_key")
     int sortKey;
 
+    @Column(name = "root_disk_size")
+    private Long rootDiskSize;
+
     @Column(name = "deployment_planner")
     private String deploymentPlanner = null;
 
@@ -259,6 +262,15 @@ public class ServiceOfferingVO extends DiskOfferingVO implements ServiceOffering
     @Override
     public Integer getRateMbps() {
         return rateMbps;
+    }
+
+
+    public void setRootDiskSize(Long rootDiskSize) {
+        this.rootDiskSize = rootDiskSize;
+    }
+
+    public Long getRootDiskSize() {
+        return rootDiskSize;
     }
 
     public void setMulticastRateMbps(Integer multicastRateMbps) {

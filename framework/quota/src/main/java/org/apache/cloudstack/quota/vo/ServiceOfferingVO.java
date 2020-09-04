@@ -72,6 +72,9 @@ public class ServiceOfferingVO extends DiskOfferingVO implements ServiceOffering
     @Column(name = "sort_key")
     int sortKey;
 
+    @Column(name = "root_disk_size")
+    private Long rootDiskSize;
+
     @Column(name = "deployment_planner")
     private String deploymentPlanner = null;
 
