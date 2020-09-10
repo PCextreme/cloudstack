@@ -2518,14 +2518,15 @@ public class ConfigurationManagerImpl extends ManagerBase implements Configurati
             }
         }
 
-        if (rootDiskSize != null && rootDiskSize <= 0L) {
-            throw new InvalidParameterValueException("The Root disk size must be greater than 0.");
-        }
-
         offering.setCustomizedIops(isCustomizedIops);
         offering.setMinIops(minIops);
         offering.setMaxIops(maxIops);
 
+        if (rootDiskSize != null && rootDiskSize <= 0L) {
+            throw new InvalidParameterValueException("The Root disk size must be greater than 0.");
+        } else if (rootDiskSize != null) {
+            offering.setRootDiskSize(rootDiskSize);
+        }
         if (rootDiskSize != null) {
             offering.setRootDiskSize(rootDiskSize);
         }

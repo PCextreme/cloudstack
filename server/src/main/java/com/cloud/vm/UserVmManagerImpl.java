@@ -561,9 +561,6 @@ public class UserVmManagerImpl extends ManagerBase implements UserVmManager, Vir
     private static final ConfigKey<Boolean> VmDestroyForcestop = new ConfigKey<Boolean>("Advanced", Boolean.class, "vm.destroy.forcestop", "false",
             "On destroy, force-stop takes this value ", true);
 
-    private static final ConfigKey<Boolean> SET_ROOT_DISK_SIZE_BY_SERVICE_OFFERING = new ConfigKey<Boolean>("Advanced", Boolean.class, "root.size.by.service.offering", "false",
-            "When set to true, the Root disk size will be configured accordingly to the Service Offering overwriting custom root size. If set to false, then Users can configure custom Root disk even if the Service Offering has a Root disk size configured.", true);
-
     @Override
     public UserVmVO getVirtualMachine(long vmId) {
         return _vmDao.findById(vmId);
@@ -1171,6 +1168,14 @@ public class UserVmManagerImpl extends ManagerBase implements UserVmManager, Vir
 
             ResizeVolumeCmd resizeVolumeCmd = new ResizeVolumeCmd(rootVolumeOfVm.getId(), newROOTDiskOffering.getMinIops(), newROOTDiskOffering.getMaxIops());
 
+            if (newServiceOffering.getRootDiskSize() != null) {
+                Long newNewOfferingRootSizeInGB = newServiceOffering.getRootDiskSize();
+                Long newNewOfferingRootSizeInBytes = newServiceOffering.getRootDiskSize() * GiB_TO_BYTES;
+                if(newNewOfferingRootSizeInBytes > rootVolumeOfVm.getSize()) {
+                    resizeVolumeCmd = new ResizeVolumeCmd(rootVolumeOfVm.getId(), newROOTDiskOffering.getMinIops(), newROOTDiskOffering.getMaxIops(), newNewOfferingRootSizeInGB);
+                }
+            }
+
             _volumeService.resizeVolume(resizeVolumeCmd);
         }
 
@@ -1749,6 +1754,13 @@ public class UserVmManagerImpl extends ManagerBase implements UserVmManager, Vir
             }
             if (vmInstance.getState().equals(State.Running)) {
                 return upgradeRunningVirtualMachine(vmId, newServiceOfferingId, customParameters);
+            }
+
+            ServiceOfferingVO newServiceOffering = _offeringDao.findById(newServiceOfferingId);
+            Long offeringRootDiskSize = newServiceOffering.getRootDiskSize();
+            if (offeringRootDiskSize != null && offeringRootDiskSize > 0) {
+//                _volumeService.resizeVolume()
+                //TODO
             }
         }
         return false;
@@ -3469,9 +3481,7 @@ public class UserVmManagerImpl extends ManagerBase implements UserVmManager, Vir
         // check if account/domain is with in resource limits to create a new vm
         boolean isIso = Storage.ImageFormat.ISO == template.getFormat();
 
-        configureCustomParametersRootDiskViaServiceOffering(customParameters, offering);
-
-        long size = configureCustomRootDiskSize(customParameters, template, hypervisorType);
+        long size = configureCustomRootDiskSize(customParameters, template, hypervisorType, offering);
 
         if (diskOfferingId != null) {
             DiskOfferingVO diskOffering = _diskOfferingDao.findById(diskOfferingId);
@@ -3788,24 +3798,13 @@ public class UserVmManagerImpl extends ManagerBase implements UserVmManager, Vir
     }
 
     /**
-     * Configures the Root disk size via VM`s custom parameters based on the Servivce Offering root disk size, if the offering has it configured.
+     * Configures the Root disk size via User`s custom parameters. If the Service Offering has the Root Disk size field configured then the User`s root disk custom parameter is overwritten by the service offering.
      */
-    protected void configureCustomParametersRootDiskViaServiceOffering(Map<String, String> customParameters, ServiceOfferingVO offering) {
+    protected long configureCustomRootDiskSize(Map<String, String> customParameters, VMTemplateVO template, HypervisorType hypervisorType, ServiceOfferingVO offering) {
         if (offering.getRootDiskSize() != null && offering.getRootDiskSize() > 0) {
-            boolean containsKey = customParameters.containsKey(VmDetailConstants.ROOT_DISK_SIZE);
-            if (isServiceOfferingOverwritingCustomRootDiskSize() || !containsKey) {
-                customParameters.put(VmDetailConstants.ROOT_DISK_SIZE, offering.getRootDiskSize().toString());
-            }
+            customParameters.put(VmDetailConstants.ROOT_DISK_SIZE, offering.getRootDiskSize().toString());
         }
-    }
 
-    protected Boolean isServiceOfferingOverwritingCustomRootDiskSize() {
-        //This method was created to easily mock the respective static ConfigKey value in Unit test methods without the need of Powermockito or Reflection
-        return SET_ROOT_DISK_SIZE_BY_SERVICE_OFFERING.value();
-    }
-
-    protected long configureCustomRootDiskSize(Map<String, String> customParameters, VMTemplateVO template, HypervisorType hypervisorType) {
-        // custom root disk size, resizes base template to larger size
         if (customParameters.containsKey(VmDetailConstants.ROOT_DISK_SIZE)) {
             verifyIfHypervisorSupportsRootdiskSizeOverride(hypervisorType);
 
@@ -7039,7 +7038,7 @@ public class UserVmManagerImpl extends ManagerBase implements UserVmManager, Vir
     public ConfigKey<?>[] getConfigKeys() {
         return new ConfigKey<?>[] {EnableDynamicallyScaleVm, AllowUserExpungeRecoverVm, VmIpFetchWaitInterval, VmIpFetchTrialMax,
                 VmIpFetchThreadPoolMax, VmIpFetchTaskWorkers, AllowDeployVmIfGivenHostFails, EnableAdditionalVmConfig, DisplayVMOVFProperties,
-                KvmAdditionalConfigAllowList, XenServerAdditionalConfigAllowList, VmwareAdditionalConfigAllowList, SET_ROOT_DISK_SIZE_BY_SERVICE_OFFERING};
+                KvmAdditionalConfigAllowList, XenServerAdditionalConfigAllowList, VmwareAdditionalConfigAllowList};
     }
 
     @Override

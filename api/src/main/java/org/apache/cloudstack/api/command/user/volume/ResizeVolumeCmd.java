@@ -87,6 +87,13 @@ public class ResizeVolumeCmd extends BaseAsyncCmd implements UserCmd {
         this.maxIops = maxIops;
     }
 
+    public ResizeVolumeCmd(Long id, Long minIops, Long maxIops, Long size) {
+        this.id = id;
+        this.minIops = minIops;
+        this.maxIops = maxIops;
+        this.size = size;
+    }
+
     //TODO use the method getId() instead of this one.
     public Long getEntityId() {
         return id;

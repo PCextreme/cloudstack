@@ -437,6 +437,14 @@
                                         isBoolean: true,
                                         isChecked: false
                                     },
+                                    rootSize: {
+                                        label: 'label.root.disk.size',
+                                        docID: 'helpRootSizeGb',
+                                        validation: {
+                                            required: false,
+                                            number: true
+                                        }
+                                    },
                                     storageTags: {
                                         label: 'label.storage.tags',
                                         docID: 'helpComputeOfferingStorageType',
@@ -752,7 +760,7 @@
                                     name: args.data.name,
                                     displaytext: args.data.description,
                                     storageType: args.data.storageType,
-                                    provisioningType :args.data.provisioningType,
+                                    provisioningType: args.data.provisioningType,
                                     customized: !isFixedOfferingType,
                                     cacheMode: args.data.cacheMode
                                 };
@@ -769,7 +777,7 @@
                                         memory: args.data.memory
                                     });
                                 } else {
-                                    if(args.data.cpuSpeed != null && args.data.minCPUNumber != null && args.data.maxCPUNumber != null && args.data.minMemory != null && args.data.maxMemory != null){
+                                    if (args.data.cpuSpeed != null && args.data.minCPUNumber != null && args.data.maxCPUNumber != null && args.data.minMemory != null && args.data.maxMemory != null) {
                                         $.extend(data, {
                                             cpuSpeed: args.data.cpuSpeed
                                         });
@@ -872,6 +880,12 @@
                                 $.extend(data, {
                                     offerha: (args.data.offerHA == "on")
                                 });
+
+                                if (args.data.rootSize != null && args.data.rootSize > 0) {
+                                    $.extend(data, {
+                                        rootSize: args.data.rootSize
+                                    });
+                                }
 
                                 if (args.data.storageTags != null && args.data.storageTags.length > 0) {
                                     $.extend(data, {
