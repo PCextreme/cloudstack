@@ -912,6 +912,12 @@ public class VolumeApiServiceImpl extends ManagerBase implements VolumeApiServic
 
         // if we are to use the existing disk offering
         if (newDiskOffering == null) {
+            if (volume.getVolumeType().equals(Volume.Type.ROOT) && diskOffering.getDiskSize() > 0) {
+                throw new InvalidParameterValueException(
+                        "Failed to resize Root volume. The service offering of this Volume has been configured with a root disk size; "
+                                + "on such case a Root Volume can only be resized when changing to another Service Offering with a Root disk size.");
+            }
+
             newSize = cmd.getSize();
             newHypervisorSnapshotReserve = volume.getHypervisorSnapshotReserve();
 

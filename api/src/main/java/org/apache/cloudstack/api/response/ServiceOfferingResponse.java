@@ -196,6 +196,10 @@ public class ServiceOfferingResponse extends BaseResponse {
     @Param(description = "the cache mode to use for this disk offering. none, writeback or writethrough", since = "4.14")
     private String cacheMode;
 
+    @SerializedName(ApiConstants.ROOT_DISK_SIZE)
+    @Param(description = "Root disk size in GB", since = "4.15")
+    private Long rootDiskSize;
+
     public ServiceOfferingResponse() {
     }
 
@@ -454,5 +458,9 @@ public class ServiceOfferingResponse extends BaseResponse {
 
     public void setCacheMode(String cacheMode) {
         this.cacheMode = cacheMode;
+    }
+
+    public void setRootDiskSize(Long rootDiskSize) {
+        this.rootDiskSize = rootDiskSize;
     }
 }

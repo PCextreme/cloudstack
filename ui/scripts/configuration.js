@@ -437,6 +437,14 @@
                                         isBoolean: true,
                                         isChecked: false
                                     },
+                                    rootDiskSize: {
+                                        label: 'label.root.disk.size',
+                                        docID: 'helpRootDiskSizeGb',
+                                        validation: {
+                                            required: false,
+                                            number: true
+                                        }
+                                    },
                                     storageTags: {
                                         label: 'label.storage.tags',
                                         docID: 'helpComputeOfferingStorageType',
@@ -752,7 +760,7 @@
                                     name: args.data.name,
                                     displaytext: args.data.description,
                                     storageType: args.data.storageType,
-                                    provisioningType :args.data.provisioningType,
+                                    provisioningType: args.data.provisioningType,
                                     customized: !isFixedOfferingType,
                                     cacheMode: args.data.cacheMode
                                 };
@@ -872,6 +880,12 @@
                                 $.extend(data, {
                                     offerha: (args.data.offerHA == "on")
                                 });
+
+                                if (args.data.rootDiskSize != null && args.data.rootDiskSize > 0) {
+                                    $.extend(data, {
+                                        rootDiskSize: args.data.rootDiskSize
+                                    });
+                                }
 
                                 if (args.data.storageTags != null && args.data.storageTags.length > 0) {
                                     $.extend(data, {

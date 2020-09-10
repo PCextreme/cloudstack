@@ -103,6 +103,7 @@ public class ServiceOfferingJoinDaoImpl extends GenericDaoBase<ServiceOfferingJo
         offeringResponse.setObjectName("serviceoffering");
         offeringResponse.setIscutomized(offering.isDynamic());
         offeringResponse.setCacheMode(offering.getCacheMode());
+        offeringResponse.setRootDiskSize(offering.getRootDiskSize());
 
         return offeringResponse;
     }
