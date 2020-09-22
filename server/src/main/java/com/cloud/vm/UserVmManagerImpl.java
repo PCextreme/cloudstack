@@ -108,7 +108,6 @@ import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.log4j.Logger;
-import org.jetbrains.annotations.NotNull;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
@@ -1121,8 +1120,6 @@ public class UserVmManagerImpl extends ManagerBase implements UserVmManager, Vir
     private UserVm upgradeStoppedVirtualMachine(Long vmId, Long svcOffId, Map<String, String> customParameters) throws ResourceAllocationException {
         Account caller = CallContext.current().getCallingAccount();
 
-        // Verify input parameters
-        //UserVmVO vmInstance = _vmDao.findById(vmId);
         VMInstanceVO vmInstance = _vmInstanceDao.findById(vmId);
         if (vmInstance == null) {
             throw new InvalidParameterValueException("unable to find a virtual machine with id " + vmId);
@@ -1168,7 +1165,7 @@ public class UserVmManagerImpl extends ManagerBase implements UserVmManager, Vir
         for (final VolumeVO rootVolumeOfVm : vols) {
             DiskOfferingVO currentRootDiskOffering = _diskOfferingDao.findById(rootVolumeOfVm.getDiskOfferingId());
 
-            ResizeVolumeCmd resizeVolumeCmd = prepareResizeVolumeCmd(newSvcOffering, newRootDiskOffering, rootVolumeOfVm, currentRootDiskOffering);
+            ResizeVolumeCmd resizeVolumeCmd = prepareResizeVolumeCmd(rootVolumeOfVm, currentRootDiskOffering, newRootDiskOffering);
 
             if (rootVolumeOfVm.getDiskOfferingId() != newRootDiskOffering.getId()) {
                 rootVolumeOfVm.setDiskOfferingId(newRootDiskOffering.getId());
@@ -1199,34 +1196,35 @@ public class UserVmManagerImpl extends ManagerBase implements UserVmManager, Vir
     }
 
     /**
-     * TODO
+     * Prepares the Resize Volume Command and verifies if the disk offering from the new service offering can be resized.
+     * <br>
+     * If the Service Offering was configured with a root disk size (size > 0) then it can only resize to an offering with a larger disk
+     * or to an offering with a root size of zero, which is the default behavior.
      */
-    private ResizeVolumeCmd prepareResizeVolumeCmd(ServiceOffering newSvcOffering, DiskOfferingVO newRootDiskOffering, VolumeVO rootVolumeOfVm,
-            DiskOfferingVO currentRootDiskOffering) {
-
-        if (newSvcOffering == null) {
-            throw new InvalidParameterValueException("Could not find Service Offering matching the provided Offering ID.");
-        }
-        if (rootVolumeOfVm == null) {
+    protected ResizeVolumeCmd prepareResizeVolumeCmd(VolumeVO rootVolume, DiskOfferingVO currentRootDiskOffering, DiskOfferingVO newRootDiskOffering) {
+        if (rootVolume == null) {
             throw new InvalidParameterValueException("Could not find Root volume for the VM while preparing the Resize Volume Command.");
         }
         if (currentRootDiskOffering == null) {
-            throw new InvalidParameterValueException("Could not find Disk Offering matching the provided Service Offering ID.");
+            throw new InvalidParameterValueException("Could not find Disk Offering matching the provided current Root Offering ID.");
+        }
+        if (newRootDiskOffering == null) {
+            throw new InvalidParameterValueException("Could not find Disk Offering matching the provided Offering ID for resizing Root volume.");
         }
 
-        ResizeVolumeCmd resizeVolumeCmd = new ResizeVolumeCmd(rootVolumeOfVm.getId(), newRootDiskOffering.getMinIops(), newRootDiskOffering.getMaxIops());
+        ResizeVolumeCmd resizeVolumeCmd = new ResizeVolumeCmd(rootVolume.getId(), newRootDiskOffering.getMinIops(), newRootDiskOffering.getMaxIops());
 
         long newNewOfferingRootSizeInBytes = newRootDiskOffering.getDiskSize();
         long newNewOfferingRootSizeInGiB = newNewOfferingRootSizeInBytes / GiB_TO_BYTES;
         long currentRootDiskOfferingGiB = currentRootDiskOffering.getDiskSize() / GiB_TO_BYTES;
-        if (newNewOfferingRootSizeInBytes >= currentRootDiskOffering.getDiskSize()) {
-            resizeVolumeCmd = new ResizeVolumeCmd(rootVolumeOfVm.getId(), newRootDiskOffering.getMinIops(), newRootDiskOffering.getMaxIops(), newRootDiskOffering.getId());
+        if (newNewOfferingRootSizeInBytes > currentRootDiskOffering.getDiskSize()) {
+            resizeVolumeCmd = new ResizeVolumeCmd(rootVolume.getId(), newRootDiskOffering.getMinIops(), newRootDiskOffering.getMaxIops(), newRootDiskOffering.getId());
             s_logger.debug(String.format("Preparing command to resize VM Root disk from %d GB to %d GB; current offering: %s, new offering: %s.", currentRootDiskOfferingGiB,
                     newNewOfferingRootSizeInGiB, currentRootDiskOffering.getName(), newRootDiskOffering.getName()));
-        } else if (newNewOfferingRootSizeInBytes < currentRootDiskOffering.getDiskSize()) {
+        } else if (newNewOfferingRootSizeInBytes > 0l && newNewOfferingRootSizeInBytes < currentRootDiskOffering.getDiskSize()) {
             throw new InvalidParameterValueException(String.format(
                     "Failed to resize Root volume. The new Service Offering [id: %d, name: %s] has a smaller disk size [%d GB] than the current disk [%d GB].",
-                    newSvcOffering.getId(), newSvcOffering.getName(), newNewOfferingRootSizeInGiB, currentRootDiskOfferingGiB));
+                    newRootDiskOffering.getId(), newRootDiskOffering.getName(), newNewOfferingRootSizeInGiB, currentRootDiskOfferingGiB));
         }
         return resizeVolumeCmd;
     }
