@@ -87,7 +87,9 @@ public class KvmNonManagedStorageDataMotionStrategy extends StorageSystemDataMot
 
                 for (VolumeInfo volumeInfo : volumeInfoSet) {
                     StoragePoolVO storagePoolVO = _storagePoolDao.findById(volumeInfo.getPoolId());
-                    if (storagePoolVO.getPoolType() != StoragePoolType.Filesystem && storagePoolVO.getPoolType() != StoragePoolType.NetworkFilesystem) {
+                    if (storagePoolVO.getPoolType() != StoragePoolType.Filesystem
+                            && storagePoolVO.getPoolType() != StoragePoolType.NetworkFilesystem
+                            && storagePoolVO.getPoolType() != StoragePoolType.RBD) {
                         return StrategyPriority.CANT_HANDLE;
                     }
                 }

@@ -164,7 +164,9 @@ public class KvmNonManagedStorageSystemDataMotionTest {
         for (int i = 0; i < storagePoolTypeArray.length; i++) {
             Map<VolumeInfo, DataStore> volumeMap = configureTestInternalCanHandle(false, storagePoolTypeArray[i]);
             StrategyPriority strategyPriority = kvmNonManagedStorageDataMotionStrategy.internalCanHandle(volumeMap, new HostVO("sourceHostUuid"), new HostVO("destHostUuid"));
-            if (storagePoolTypeArray[i] == StoragePoolType.Filesystem || storagePoolTypeArray[i] == StoragePoolType.NetworkFilesystem) {
+            if (storagePoolTypeArray[i] == StoragePoolType.Filesystem
+                    || storagePoolTypeArray[i] == StoragePoolType.NetworkFilesystem
+                    || storagePoolTypeArray[i] == StoragePoolType.RBD) {
                 Assert.assertEquals(StrategyPriority.HYPERVISOR, strategyPriority);
             } else {
                 Assert.assertEquals(StrategyPriority.CANT_HANDLE, strategyPriority);
