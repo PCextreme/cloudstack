@@ -42,6 +42,7 @@ public class PrimaryDataStoreParameters {
     private long usedBytes;
     private boolean managed;
     private Long capacityIops;
+    private String protocolVersion;
 
     /**
      * @return the userInfo
@@ -276,5 +277,13 @@ public class PrimaryDataStoreParameters {
 
     public void setUsedBytes(long usedBytes) {
         this.usedBytes = usedBytes;
+    }
+
+    public String getProtocolVersion() {
+        return protocolVersion;
+    }
+
+    public void setProtocolVersion(String protocolVersion) {
+        this.protocolVersion = protocolVersion;
     }
 }
