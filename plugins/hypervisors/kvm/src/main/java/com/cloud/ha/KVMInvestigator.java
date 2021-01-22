@@ -33,6 +33,7 @@ import org.apache.cloudstack.ha.HAManager;
 import org.apache.cloudstack.storage.datastore.db.PrimaryDataStoreDao;
 import org.apache.cloudstack.storage.datastore.db.StoragePoolVO;
 import org.apache.log4j.Logger;
+import org.jetbrains.annotations.NotNull;
 
 import javax.inject.Inject;
 import java.util.List;
@@ -85,12 +86,23 @@ public class KVMInvestigator extends AdapterBase implements Investigator {
                 break;
             }
         }
-        if (!hasNfs) {
-            s_logger.warn(
-                    "Agent investigation was requested on host " + agent + ", but host does not support investigation because it has no NFS storage. Skipping investigation.");
-            return Status.Disconnected;
+        Status agentStatus = Status.Disconnected;
+        if (hasNfs) {
+            s_logger.debug("Agent investigation was requested on host " + agent + ", checking agent status via NFS storage.");
+            agentStatus = checkAgentStatusViaNfs(agent);
+        } else {
+            s_logger.debug(
+                    "Agent investigation was requested on host " + agent + ", but host has no NFS storage. Skipping investigation via NFS.");
         }
+//      TODO
+//        agentStatus = checkHostStatusViaAgentHaHelper(agent);
 
+        return agentStatus;
+    }
+
+    //TODO
+    @NotNull
+    private Status checkAgentStatusViaNfs(Host agent) {
         Status hostStatus = null;
         Status neighbourStatus = null;
         CheckOnHostCommand cmd = new CheckOnHostCommand(agent);
