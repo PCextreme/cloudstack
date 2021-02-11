@@ -46,9 +46,9 @@ import java.util.concurrent.TimeUnit;
  * to this simple webserver and determine if the host is actually down
  * or if it is just the Java Agent which has crashed.
  */
-public class KvmAgentHaClient {
+public class KvmHaAgentClient {
 
-    private static final Logger LOGGER = Logger.getLogger(KvmAgentHaClient.class);
+    private static final Logger LOGGER = Logger.getLogger(KvmHaAgentClient.class);
     private final static int WAIT_FOR_REQUEST_RETRY = 2;
     private final static String VM_COUNT = "count";
     private final static int ERROR_CODE = -1;
@@ -60,7 +60,7 @@ public class KvmAgentHaClient {
     /**
      * Instantiates a webclient that checks, via a webserver running on the KVM host, the VMs running
      */
-    public KvmAgentHaClient(Host agent) {
+    public KvmHaAgentClient(Host agent) {
         this.agent = agent;
     }
 
@@ -83,11 +83,29 @@ public class KvmAgentHaClient {
     }
 
     /**
-     *  Returns true in case of the expected number of VMs matches with the VMs running on the KVM host according to libvirt. If the ammount of VMs are not the same then it is assumed that
+     *  Returns true in case of the expected number of VMs matches with the VMs running on the KVM host according to Libvirt. <br><br>
+     *
+     *  IF: <br>
+     *  (i) expected VMs running but listed 0 VMs: returns false as could not find VMs running but it expected at least one VM running, fencing/recovering host would avoid downtime to VMs in this case.<br>
+     *  (ii) amount of listed VMs is different than expected: return true and print WARN messages so Admins can look closely to what is happening on the host
      */
-    public boolean checkAgentHealthAndRunningVms(int expectedNumberOfVms) {
+    public boolean isKvmHaAgentHealthy(int expectedNumberOfVms) {
         int numberOfVmsOnAgent = countRunningVmsOnAgent();
-        return expectedNumberOfVms == numberOfVmsOnAgent;
+        if (numberOfVmsOnAgent < 0) {
+            LOGGER.error("KVM HA Agent health check failed, either the KVM Agent is unreachable or Libvirt validation failed");
+            return false;
+        }  if (expectedNumberOfVms == numberOfVmsOnAgent) {
+            return true;
+        } if (numberOfVmsOnAgent == 0) {
+            // Return false as could not find VMs running but it expected at least one VM running, fencing/recovering host would avoid downtime to VMs in this case.
+            LOGGER.warn(String.format("KVM HA Agent could not find running VMs; it was expected to list %d running VMs.", expectedNumberOfVms));
+            return false;
+        }
+        // In order to have a less "aggressive" health-check, the KvmHaAgentClient will not return false; fencing/recovering could bring downtime to existing VMs
+        // Additionally, the inconsistency can also be due to jobs in progress to migrate/stop/start VMs
+        // Either way, WARN messages should be presented to Admins so they can look closely to what is happening on the host
+        LOGGER.warn(String.format("KVM HA Agent listed %d running VMs; however, it was expected %d running VMs.", numberOfVmsOnAgent, expectedNumberOfVms));
+        return true;
     }
 
     /**
@@ -158,7 +176,7 @@ public class KvmAgentHaClient {
     }
 
     /**
-     * Processes the response of request GET System ID as a JSON object.<br><br>
+     * Processes the response of request GET System ID as a JSON object.<br>
      *
      * Json example: {"count": 3, "virtualmachines": ["r-123-VM", "v-134-VM", "s-111-VM"]}<br><br>
      *

@@ -26,7 +26,7 @@ import com.cloud.host.Host;
 import com.cloud.host.HostVO;
 import com.cloud.host.Status;
 import com.cloud.hypervisor.Hypervisor;
-import com.cloud.hypervisor.kvm.resource.KvmAgentHaClient;
+import com.cloud.hypervisor.kvm.resource.KvmHaAgentClient;
 import com.cloud.resource.ResourceManager;
 import com.cloud.storage.Storage;
 import com.cloud.storage.StorageManager;
@@ -87,11 +87,11 @@ public class KVMHostActivityChecker extends AdapterBase implements ActivityCheck
         HashMap<StoragePool, List<Volume>> poolVolMap = getVolumeUuidOnHost(r);
         isHealthy = isHealthyCheckViaNfs(r, isHealthy, poolVolMap);
 
-        KvmAgentHaClient kvmAgentHaClient = new KvmAgentHaClient(r);
+        KvmHaAgentClient kvmHaAgentClient = new KvmHaAgentClient(r);
         List<VMInstanceVO> vmsOnHost = vmInstanceDao.listByHostId(r.getId());
-        boolean checkKvmHeatlh = kvmAgentHaClient.checkAgentHealthAndRunningVms(vmsOnHost.size());
+        boolean isKvmHaAgentHealthy = kvmHaAgentClient.isKvmHaAgentHealthy(vmsOnHost.size());
 
-        if(!isHealthy && checkKvmHeatlh) {
+        if(!isHealthy && isKvmHaAgentHealthy) {
             isHealthy = true;
         }
 
@@ -190,11 +190,11 @@ public class KVMHostActivityChecker extends AdapterBase implements ActivityCheck
             }
         }
 
-        KvmAgentHaClient kvmAgentHaClient = new KvmAgentHaClient(agent);
+        KvmHaAgentClient kvmHaAgentClient = new KvmHaAgentClient(agent);
         List<VMInstanceVO> vmsOnHost = vmInstanceDao.listByHostId(agent.getId());
-        boolean isVmsOnKvmMatchingWithDatabase = kvmAgentHaClient.checkAgentHealthAndRunningVms(vmsOnHost.size());
+        boolean isKvmHaAgentHealthy = kvmHaAgentClient.isKvmHaAgentHealthy(vmsOnHost.size());
 
-        if(!activityStatus && isVmsOnKvmMatchingWithDatabase) {
+        if(!activityStatus && isKvmHaAgentHealthy) {
             activityStatus = true;
         } else {
             LOG.warn(String.format("No VM activity detected on %s. This might trigger HA Host Recovery and/or Fence.", agent.toString()));

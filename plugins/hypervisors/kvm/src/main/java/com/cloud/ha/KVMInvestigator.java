@@ -26,7 +26,7 @@ import com.cloud.host.HostVO;
 import com.cloud.host.Status;
 import com.cloud.host.dao.HostDao;
 import com.cloud.hypervisor.Hypervisor;
-import com.cloud.hypervisor.kvm.resource.KvmAgentHaClient;
+import com.cloud.hypervisor.kvm.resource.KvmHaAgentClient;
 import com.cloud.resource.ResourceManager;
 import com.cloud.storage.Storage.StoragePoolType;
 import com.cloud.utils.component.AdapterBase;
@@ -93,25 +93,27 @@ public class KVMInvestigator extends AdapterBase implements Investigator {
         Status agentStatus = Status.Disconnected;
         if (hasNfs) {
             agentStatus = checkAgentStatusViaNfs(agent);
-            s_logger.debug(String.format("Agent investigation was requested on host %s, agent status via NFS storage is %s.", agent, agentStatus));
+            s_logger.debug(String.format("Agent investigation was requested on host %s. Agent status via NFS heartbeat is %s.", agent, agentStatus));
         } else {
             s_logger.debug(String.format("Agent investigation was requested on host %s, but host has no NFS storage. Skipping investigation via NFS.", agent));
         }
 
         List<VMInstanceVO> vmsOnHost = vmInstanceDao.listByHostId(agent.getId());
-        KvmAgentHaClient kvmAgentHaClient = new KvmAgentHaClient(agent);
-        boolean isVmsOnKvmMatchingWithDatabase = kvmAgentHaClient.checkAgentHealthAndRunningVms(vmsOnHost.size());
+        KvmHaAgentClient kvmHaAgentClient = new KvmHaAgentClient(agent);
+        boolean isVmsOnKvmMatchingWithDatabase = kvmHaAgentClient.isKvmHaAgentHealthy(vmsOnHost.size());
         if(isVmsOnKvmMatchingWithDatabase) {
             agentStatus = Status.Up;
-            s_logger.debug(String.format("Checking agent %s status; KVM HA webserver is Running as expected."));
+            s_logger.debug(String.format("Checking agent %s status; KVM HA Agent is Running as expected."));
         } else {
-            s_logger.warn(String.format("Checking agent %s status. Failed to check host status via KVM Agent HA webserver"));
+            s_logger.warn(String.format("Checking agent %s status. Failed to check host status via KVM HA Agent"));
         }
 
         return agentStatus;
     }
 
-    //TODO
+    /**
+     * TODO
+     */
     private Status checkAgentStatusViaNfs(Host agent) {
         Status hostStatus = null;
         Status neighbourStatus = null;
