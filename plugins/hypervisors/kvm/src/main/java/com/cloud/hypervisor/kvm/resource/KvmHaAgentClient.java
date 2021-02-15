@@ -27,6 +27,7 @@ import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.log4j.Logger;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -112,12 +113,8 @@ public class KvmHaAgentClient {
      * Executes a GET request for the given URL address.
      */
     protected HttpResponse executeHttpRequest(String url) {
-        HttpGet httpReq = null;
-        try {
-            URIBuilder builder = new URIBuilder(url);
-            httpReq = new HttpGet(builder.build());
-        } catch (URISyntaxException e) {
-            LOGGER.error(String.format("Failed to create URI for GET request [URL: %s] due to exception.", url), e);
+        HttpGet httpReq = prepareHttpRequestForUrl(url);
+        if (httpReq == null) {
             return null;
         }
 
@@ -135,10 +132,22 @@ public class KvmHaAgentClient {
         return response;
     }
 
+    @Nullable private HttpGet prepareHttpRequestForUrl(String url) {
+        HttpGet httpReq = null;
+        try {
+            URIBuilder builder = new URIBuilder(url);
+            httpReq = new HttpGet(builder.build());
+        } catch (URISyntaxException e) {
+            LOGGER.error(String.format("Failed to create URI for GET request [URL: %s] due to exception.", url), e);
+            return null;
+        }
+        return httpReq;
+    }
+
     /**
      * Re-executes the HTTP GET request until it gets a response or it reaches the maximum request retries (#MAX_REQUEST_RETRIES)
      */
-    protected HttpResponse retryHttpRequest(String url, HttpRequestBase httpReq, HttpClient client) {
+    private HttpResponse retryHttpRequest(String url, HttpRequestBase httpReq, HttpClient client) {
         LOGGER.warn(String.format("Failed to execute HTTP %s request [URL: %s]. Executing the request again.", httpReq.getMethod(), url));
         HttpResponse response = null;
         for (int attempt = 1; attempt < MAX_REQUEST_RETRIES + 1; attempt++) {
