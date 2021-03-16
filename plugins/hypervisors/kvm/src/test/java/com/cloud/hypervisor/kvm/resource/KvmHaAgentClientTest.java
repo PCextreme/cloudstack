@@ -26,7 +26,9 @@ import org.apache.http.StatusLine;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.junit.Assert;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.mockito.Mockito;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -34,7 +36,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 
-//@RunWith(MockitoJUnitRunner.class)
+@RunWith(MockitoJUnitRunner.class)
 public class KvmHaAgentClientTest {
 
     private static final String AGENT_ADDRESS = "kvm-agent.domain.name";
@@ -48,11 +50,6 @@ public class KvmHaAgentClientTest {
     private static final int EXPECTED_RUNNING_VMS_EXAMPLE_3VMs = 3;
     private static final String JSON_STRING_EXAMPLE_0VMs = "{\"count\": 0, \"virtualmachines\": []}";
     private static final int EXPECTED_RUNNING_VMS_EXAMPLE_0VMs = 0;
-
-//    @Before
-//    public void setup() {
-//        Mockito.when(agent.getPrivateIpAddress()).thenReturn(PRIVATE_IP_ADDRESS);
-//    }
 
     @Test
     public void isKvmHaAgentHealthyTestAllGood() {
@@ -96,13 +93,6 @@ public class KvmHaAgentClientTest {
         HttpEntity httpEntity = Mockito.mock(HttpEntity.class);
         InputStream in = IOUtils.toInputStream(jsonString, StandardCharsets.UTF_8);
         BufferedReader buffer = Mockito.spy(new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8)));
-
-        Mockito.when(statusLine.getStatusCode()).thenReturn(httpStatusCode);
-        Mockito.when(response.getStatusLine()).thenReturn(statusLine);
-        Mockito.when(response.getEntity()).thenReturn(httpEntity);
-        Mockito.doReturn(in).when(httpEntity).getContent();
-        Mockito.when(buffer.readLine()).thenReturn(jsonString);
-        Mockito.doReturn(response).when(kvmHaAgentClient).executeHttpRequest(Mockito.anyString());
 
         return response;
     }

@@ -87,14 +87,26 @@ public class KVMHostActivityChecker extends AdapterBase implements ActivityCheck
         HashMap<StoragePool, List<Volume>> poolVolMap = getVolumeUuidOnHost(r);
         isHealthy = isHealthyCheckViaNfs(r, isHealthy, poolVolMap);
 
+        isHealthy = checkHealthViaHaWebservice(r, isHealthy);
+
+        return isHealthy;
+    }
+
+    /**
+     * TODO
+     */
+    private boolean checkHealthViaHaWebservice(Host r, boolean isHealthy) {
         KvmHaAgentClient kvmHaAgentClient = new KvmHaAgentClient(r);
+        if(!kvmHaAgentClient.isKvmHaWebserviceEnabled()) {
+            LOG.debug(String.format("Not pwe"));
+        }
+
         List<VMInstanceVO> vmsOnHost = vmInstanceDao.listByHostId(r.getId());
         boolean isKvmHaAgentHealthy = kvmHaAgentClient.isKvmHaAgentHealthy(vmsOnHost.size());
 
-        if(!isHealthy && isKvmHaAgentHealthy) {
+        if (!isHealthy && isKvmHaAgentHealthy) {
             isHealthy = true;
         }
-
         return isHealthy;
     }
 
@@ -199,6 +211,7 @@ public class KVMHostActivityChecker extends AdapterBase implements ActivityCheck
         } else {
             LOG.warn(String.format("No VM activity detected on %s. This might trigger HA Host Recovery and/or Fence.", agent.toString()));
         }
+//        activityStatus = checkHealthViaHaWebservice(agent, activityStatus);
 
         return activityStatus;
     }
