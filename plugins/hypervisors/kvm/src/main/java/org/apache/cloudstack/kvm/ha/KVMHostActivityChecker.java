@@ -21,6 +21,8 @@ import com.cloud.agent.AgentManager;
 import com.cloud.agent.api.Answer;
 import com.cloud.agent.api.CheckOnHostCommand;
 import com.cloud.agent.api.CheckVMActivityOnStoragePoolCommand;
+import com.cloud.dc.ClusterVO;
+import com.cloud.dc.dao.ClusterDao;
 import com.cloud.exception.StorageUnavailableException;
 import com.cloud.host.Host;
 import com.cloud.host.HostVO;
@@ -66,6 +68,8 @@ public class KVMHostActivityChecker extends AdapterBase implements ActivityCheck
     private StorageManager storageManager;
     @Inject
     private ResourceManager resourceManager;
+    @Inject
+    private ClusterDao clusterDao;
 
     @Override
     public boolean isActive(Host r, DateTime suspectTime) throws HACheckerException {
@@ -87,18 +91,24 @@ public class KVMHostActivityChecker extends AdapterBase implements ActivityCheck
         HashMap<StoragePool, List<Volume>> poolVolMap = getVolumeUuidOnHost(r);
         isHealthy = isHealthyCheckViaNfs(r, isHealthy, poolVolMap);
 
-        isHealthy = checkHealthViaHaWebservice(r, isHealthy);
+        isHealthy = checkHealthViaKvmHaWebservice(r, isHealthy);
 
         return isHealthy;
     }
 
     /**
-     * TODO
+     * Checks the host healthy via an web-service that retrieves Running KVM instances via libvirt. <br>
+     * The health-check is executed on the KVM node and verifies the amount of VMs running and if the libvirt service is running. <br><br>
+     *
+     * One can enable or disable it via global settings 'kvm.ha.webservice.enabled'.
      */
-    private boolean checkHealthViaHaWebservice(Host r, boolean isHealthy) {
+    private boolean checkHealthViaKvmHaWebservice(Host r, boolean isHealthy) {
         KvmHaAgentClient kvmHaAgentClient = new KvmHaAgentClient(r);
         if(!kvmHaAgentClient.isKvmHaWebserviceEnabled()) {
-            LOG.debug(String.format("Not pwe"));
+            ClusterVO cluster = clusterDao.findById(r.getClusterId());
+            LOG.debug(String.format("Skipping KVM HA web-service verification for %s due to 'kvm.ha.webservice.enabled' not enabled for cluster [id: %d, name: %s].",
+                    r.toString(), cluster.getId(), cluster.getName()));
+            return isHealthy;
         }
 
         List<VMInstanceVO> vmsOnHost = vmInstanceDao.listByHostId(r.getId());
@@ -202,16 +212,11 @@ public class KVMHostActivityChecker extends AdapterBase implements ActivityCheck
             }
         }
 
-        KvmHaAgentClient kvmHaAgentClient = new KvmHaAgentClient(agent);
-        List<VMInstanceVO> vmsOnHost = vmInstanceDao.listByHostId(agent.getId());
-        boolean isKvmHaAgentHealthy = kvmHaAgentClient.isKvmHaAgentHealthy(vmsOnHost.size());
+        activityStatus = checkHealthViaKvmHaWebservice(agent, activityStatus);
 
-        if(!activityStatus && isKvmHaAgentHealthy) {
-            activityStatus = true;
-        } else {
+        if(!activityStatus){
             LOG.warn(String.format("No VM activity detected on %s. This might trigger HA Host Recovery and/or Fence.", agent.toString()));
         }
-//        activityStatus = checkHealthViaHaWebservice(agent, activityStatus);
 
         return activityStatus;
     }

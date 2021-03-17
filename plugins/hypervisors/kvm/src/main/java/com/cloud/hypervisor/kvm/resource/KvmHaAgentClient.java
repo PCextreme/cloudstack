@@ -15,6 +15,8 @@
  */
 package com.cloud.hypervisor.kvm.resource;
 
+import com.cloud.dc.ClusterVO;
+import com.cloud.dc.dao.ClusterDao;
 import com.cloud.host.Host;
 import com.cloud.utils.exception.CloudRuntimeException;
 import com.google.gson.JsonObject;
@@ -31,6 +33,7 @@ import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
 
+import javax.inject.Inject;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -50,6 +53,9 @@ import java.util.concurrent.TimeUnit;
  * or if it is just the Java Agent which has crashed.
  */
 public class KvmHaAgentClient implements Configurable {
+
+    @Inject
+    private ClusterDao clusterDao;
 
     private static final Logger LOGGER = Logger.getLogger(KvmHaAgentClient.class);
     private final static int WAIT_FOR_REQUEST_RETRY = 2;
@@ -95,7 +101,8 @@ public class KvmHaAgentClient implements Configurable {
     private int getKvmHaMicroservicePortValue() {
         Integer haAgentPort = KVM_HA_WEBSERVICE_PORT.value();
         if (haAgentPort == null) {
-            LOGGER.warn(String.format("Using default kvm.ha.webservice.port: %s as user set it to NULL.", KVM_HA_WEBSERVICE_PORT.defaultValue()));
+            ClusterVO cluster = clusterDao.findById(agent.getClusterId());
+            LOGGER.warn(String.format("Using default kvm.ha.webservice.port: %s as it was set to NULL for cluster [id: %d, name: %s].", KVM_HA_WEBSERVICE_PORT.defaultValue(), cluster.getId(), cluster.getName()));
             haAgentPort = Integer.parseInt(KVM_HA_WEBSERVICE_PORT.defaultValue());
         }
         return haAgentPort;
@@ -117,10 +124,11 @@ public class KvmHaAgentClient implements Configurable {
      */
     public boolean isKvmHaAgentHealthy(int expectedNumberOfVms) {
         int numberOfVmsOnAgent = countRunningVmsOnAgent();
+
         if (numberOfVmsOnAgent < 0) {
             LOGGER.error("KVM HA Agent health check failed, either the KVM Agent is unreachable or Libvirt validation failed");
             return false;
-        }  if (expectedNumberOfVms == numberOfVmsOnAgent) {
+        } if (expectedNumberOfVms == numberOfVmsOnAgent) {
             return true;
         } if (numberOfVmsOnAgent == 0) {
             // Return false as could not find VMs running but it expected at least one VM running, fencing/recovering host would avoid downtime to VMs in this case.
@@ -173,26 +181,9 @@ public class KvmHaAgentClient implements Configurable {
     /**
      * Re-executes the HTTP GET request until it gets a response or it reaches the maximum request retries (#MAX_REQUEST_RETRIES)
      */
-    private HttpResponse retryHttpRequest(String url, HttpRequestBase httpReq, HttpClient client) {
+    protected HttpResponse retryHttpRequest(String url, HttpRequestBase httpReq, HttpClient client) {
         LOGGER.warn(String.format("Failed to execute HTTP %s request [URL: %s]. Executing the request again.", httpReq.getMethod(), url));
-        HttpResponse response = null;
-        for (int attempt = 1; attempt < MAX_REQUEST_RETRIES + 1; attempt++) {
-            try {
-                TimeUnit.SECONDS.sleep(WAIT_FOR_REQUEST_RETRY);
-                LOGGER.debug(String.format("Retry HTTP %s request [URL: %s], attempt %d/%d.", httpReq.getMethod(), url, attempt, MAX_REQUEST_RETRIES));
-                response = client.execute(httpReq);
-            } catch (IOException | InterruptedException e) {
-                if (attempt == MAX_REQUEST_RETRIES) {
-                    LOGGER.error(
-                            String.format("Failed to execute HTTP %s request retry attempt %d/%d [URL: %s] due to exception %s", httpReq.getMethod(), attempt, MAX_REQUEST_RETRIES,
-                                    url, e));
-                } else {
-                    LOGGER.error(
-                            String.format("Failed to execute HTTP %s request retry attempt %d/%d [URL: %s] due to exception %s", httpReq.getMethod(), attempt, MAX_REQUEST_RETRIES,
-                                    url, e));
-                }
-            }
-        }
+        HttpResponse response = retryUntilGetsHttpResponse(url, httpReq, client);
 
         if (response == null) {
             LOGGER.error(String.format("Failed to execute HTTP %s request [URL: %s].", httpReq.getMethod(), url));
@@ -208,6 +199,27 @@ public class KvmHaAgentClient implements Configurable {
 
         LOGGER.debug(String.format("Successfully executed HTTP %s request [URL: %s].", httpReq.getMethod(), url));
         return response;
+    }
+
+    protected HttpResponse retryUntilGetsHttpResponse(String url, HttpRequestBase httpReq, HttpClient client) {
+        for (int attempt = 1; attempt < MAX_REQUEST_RETRIES + 1; attempt++) {
+            try {
+                TimeUnit.SECONDS.sleep(WAIT_FOR_REQUEST_RETRY);
+                LOGGER.debug(String.format("Retry HTTP %s request [URL: %s], attempt %d/%d.", httpReq.getMethod(), url, attempt, MAX_REQUEST_RETRIES));
+                return client.execute(httpReq);
+            } catch (IOException | InterruptedException e) {
+                if (attempt == MAX_REQUEST_RETRIES) {
+                    LOGGER.error(
+                            String.format("Failed to execute HTTP %s request retry attempt %d/%d [URL: %s] due to exception %s", httpReq.getMethod(), attempt, MAX_REQUEST_RETRIES,
+                                    url, e));
+                } else {
+                    LOGGER.error(
+                            String.format("Failed to execute HTTP %s request retry attempt %d/%d [URL: %s] due to exception %s", httpReq.getMethod(), attempt, MAX_REQUEST_RETRIES,
+                                    url, e));
+                }
+            }
+        }
+        return null;
     }
 
     /**
