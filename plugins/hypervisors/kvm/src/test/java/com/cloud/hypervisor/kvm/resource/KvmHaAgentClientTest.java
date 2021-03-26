@@ -17,6 +17,8 @@ package com.cloud.hypervisor.kvm.resource;
 
 import com.cloud.host.HostVO;
 import com.cloud.utils.exception.CloudRuntimeException;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.apache.commons.io.IOUtils;
@@ -28,6 +30,7 @@ import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpRequestBase;
+import org.apache.http.entity.InputStreamEntity;
 import org.apache.http.message.BasicStatusLine;
 import org.junit.Assert;
 import org.junit.Test;
@@ -48,19 +51,19 @@ public class KvmHaAgentClientTest {
     private KvmHaAgentClient kvmHaAgentClient = Mockito.spy(new KvmHaAgentClient(agent));
     private static final int DEFAULT_PORT = 8080;
     private static final String PRIVATE_IP_ADDRESS = "1.2.3.4";
-    private static final String JSON_STRING_EXAMPLE_3VMs = "{\"count\": 3, \"virtualmachines\": [\"r-123-VM\", \"v-134-VM\", \"s-111-VM\"]}";
+    private static final String JSON_STRING_EXAMPLE_3VMs = "{\"count\":3,\"virtualmachines\":[\"r-123-VM\",\"v-134-VM\",\"s-111-VM\"]}";
     private static final int EXPECTED_RUNNING_VMS_EXAMPLE_3VMs = 3;
-    private static final String JSON_STRING_EXAMPLE_0VMs = "{\"count\": 0, \"virtualmachines\": []}";
+    private static final String JSON_STRING_EXAMPLE_0VMs = "{\"count\":0,\"virtualmachines\":[]}";
     private static final int EXPECTED_RUNNING_VMS_EXAMPLE_0VMs = 0;
     private static final String EXPECTED_URL = String.format("http://%s:%d", PRIVATE_IP_ADDRESS, DEFAULT_PORT);
     private static final HttpRequestBase HTTP_REQUEST_BASE = new HttpGet(EXPECTED_URL);
+    private static final String VMS_COUNT = "count";
+    private static final String VIRTUAL_MACHINES = "virtualmachines";
     private static final int MAX_REQUEST_RETRIES = 2;
+    private static final int KVM_HA_WEBSERVICE_PORT = 8080;
 
     @Mock
     HttpClient client;
-
-    @Mock
-    HttpResponse httpResponse;
 
     @Test
     public void isKvmHaAgentHealthyTestAllGood() {
@@ -97,44 +100,37 @@ public class KvmHaAgentClientTest {
         Assert.assertNull(responseJson);
     }
 
-//    /**
-//     * Processes the response of request GET System ID as a JSON object.<br>
-//     *
-//     * Json example: {"count": 3, "virtualmachines": ["r-123-VM", "v-134-VM", "s-111-VM"]}<br><br>
-//     *
-//     * Note: this method can return NULL JsonObject in case HttpResponse is NULL.
-//     */
-//    protected JsonObject processHttpResponseIntoJson(HttpResponse response) {
-//        InputStream in;
-//        String jsonString;
-//        if (response == null) {
-//            return null;
-//        }
-//        try {
-//            in = response.getEntity().getContent();
-//            BufferedReader streamReader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));
-//            jsonString = streamReader.readLine();
-//        } catch (UnsupportedOperationException | IOException e) {
-//            throw new CloudRuntimeException("Failed to process response", e);
-//        }
-//
-//        return new JsonParser().parse(jsonString).getAsJsonObject();
-//    }
-
     @Test
     public void processHttpResponseIntoJsonTest() throws IOException {
-        CloseableHttpResponse mockedResponse = mockResponse(HttpStatus.SC_OK);
-        JsonObject responseJson = kvmHaAgentClient.processHttpResponseIntoJson(mockedResponse);
-//        Assert.assertNull(responseJson);
+        prepareAndTestProcessHttpResponseIntoJson(JSON_STRING_EXAMPLE_3VMs, 3l);
     }
 
-    private CloseableHttpResponse mockResponse(int httpStatusCode) throws IOException {
+    @Test
+    public void processHttpResponseIntoJsonTestOtherJsonExample() throws IOException {
+        prepareAndTestProcessHttpResponseIntoJson(JSON_STRING_EXAMPLE_0VMs, 0l);
+    }
+
+    private void prepareAndTestProcessHttpResponseIntoJson(String jsonString, long expectedVmsCount) throws IOException {
+        CloseableHttpResponse mockedResponse = mockResponse(HttpStatus.SC_OK, jsonString);
+        JsonObject responseJson = kvmHaAgentClient.processHttpResponseIntoJson(mockedResponse);
+
+        Assert.assertNotNull(responseJson);
+        JsonElement jsonElementVmsCount = responseJson.get(VMS_COUNT);
+        JsonElement jsonElementVmsArray = responseJson.get(VIRTUAL_MACHINES);
+        JsonArray jsonArray = jsonElementVmsArray.getAsJsonArray();
+
+        Assert.assertEquals(expectedVmsCount, jsonArray.size());
+        Assert.assertEquals(expectedVmsCount, jsonElementVmsCount.getAsLong());
+        Assert.assertEquals(jsonString, responseJson.toString());
+    }
+
+    private CloseableHttpResponse mockResponse(int httpStatusCode, String jsonString) throws IOException {
         BasicStatusLine basicStatusLine = new BasicStatusLine(new ProtocolVersion("HTTP", 1000, 123), httpStatusCode, "Status");
         CloseableHttpResponse response = Mockito.mock(CloseableHttpResponse.class);
+        InputStream in = IOUtils.toInputStream(jsonString, StandardCharsets.UTF_8);
         Mockito.when(response.getStatusLine()).thenReturn(basicStatusLine);
-        HttpEntity httpEntity = null;
+        HttpEntity httpEntity = new InputStreamEntity(in);
         Mockito.when(response.getEntity()).thenReturn(httpEntity);
-        InputStream in = IOUtils.toInputStream(JSON_STRING_EXAMPLE_3VMs, StandardCharsets.UTF_8);
         return response;
     }
 
@@ -150,7 +146,7 @@ public class KvmHaAgentClientTest {
 
     private void prepareAndRunCountRunningVmsOnAgent(String jsonStringExample, int expectedListedVms) throws IOException {
         Mockito.when(agent.getPrivateIpAddress()).thenReturn(PRIVATE_IP_ADDRESS);
-        Mockito.doReturn(mockResponse(HttpStatus.SC_OK)).when(kvmHaAgentClient).executeHttpRequest(EXPECTED_URL);
+        Mockito.doReturn(mockResponse(HttpStatus.SC_OK, JSON_STRING_EXAMPLE_3VMs)).when(kvmHaAgentClient).executeHttpRequest(EXPECTED_URL);
 
         JsonObject jObject = new JsonParser().parse(jsonStringExample).getAsJsonObject();
         Mockito.doReturn(jObject).when(kvmHaAgentClient).processHttpResponseIntoJson(Mockito.any(HttpResponse.class));
@@ -199,14 +195,14 @@ public class KvmHaAgentClientTest {
     }
 
     private void prepareAndRunRetryHttpRequestTest(int scMultipleChoices) throws IOException {
-        HttpResponse mockedResponse = mockResponse(scMultipleChoices);
+        HttpResponse mockedResponse = mockResponse(scMultipleChoices, JSON_STRING_EXAMPLE_3VMs);
         Mockito.doReturn(mockedResponse).when(kvmHaAgentClient).retryUntilGetsHttpResponse(Mockito.anyString(), Mockito.any(), Mockito.any());
         kvmHaAgentClient.retryHttpRequest(EXPECTED_URL, HTTP_REQUEST_BASE, client);
     }
 
     @Test
     public void retryHttpRequestTestHttpOk() throws IOException {
-        HttpResponse mockedResponse = mockResponse(HttpStatus.SC_OK);
+        HttpResponse mockedResponse = mockResponse(HttpStatus.SC_OK, JSON_STRING_EXAMPLE_3VMs);
         Mockito.doReturn(mockedResponse).when(kvmHaAgentClient).retryUntilGetsHttpResponse(Mockito.anyString(), Mockito.any(), Mockito.any());
         HttpResponse result = kvmHaAgentClient.retryHttpRequest(EXPECTED_URL, HTTP_REQUEST_BASE, client);
         Mockito.verify(kvmHaAgentClient, Mockito.times(1)).retryUntilGetsHttpResponse(Mockito.anyString(), Mockito.any(), Mockito.any());
@@ -215,7 +211,7 @@ public class KvmHaAgentClientTest {
 
     @Test
     public void retryUntilGetsHttpResponseTestOneIOException() throws IOException {
-        Mockito.when(client.execute(HTTP_REQUEST_BASE)).thenThrow(IOException.class).thenReturn(mockResponse(HttpStatus.SC_OK));
+        Mockito.when(client.execute(HTTP_REQUEST_BASE)).thenThrow(IOException.class).thenReturn(mockResponse(HttpStatus.SC_OK, JSON_STRING_EXAMPLE_3VMs));
         kvmHaAgentClient.retryUntilGetsHttpResponse(EXPECTED_URL, HTTP_REQUEST_BASE, client);
         Mockito.verify(client, Mockito.times(MAX_REQUEST_RETRIES)).execute(Mockito.any());
     }
@@ -232,6 +228,16 @@ public class KvmHaAgentClientTest {
         Mockito.when(client.execute(HTTP_REQUEST_BASE)).thenThrow(IOException.class).thenThrow(IOException.class);
         kvmHaAgentClient.retryHttpRequest(EXPECTED_URL, HTTP_REQUEST_BASE, client);
         Mockito.verify(client, Mockito.times(MAX_REQUEST_RETRIES)).execute(Mockito.any());
+    }
+
+    @Test
+    public void isKvmHaWebserviceEnabledTestDefault() {
+        Assert.assertTrue(kvmHaAgentClient.isKvmHaWebserviceEnabled());
+    }
+
+    @Test
+    public void getKvmHaMicroservicePortValueTestDefault() {
+        Assert.assertEquals(KVM_HA_WEBSERVICE_PORT, kvmHaAgentClient.getKvmHaMicroservicePortValue());
     }
 
 }

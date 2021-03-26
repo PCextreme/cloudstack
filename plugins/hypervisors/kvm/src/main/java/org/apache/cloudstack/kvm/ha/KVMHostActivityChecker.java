@@ -123,7 +123,6 @@ public class KVMHostActivityChecker extends AdapterBase implements ActivityCheck
     private boolean isHealthyCheckViaNfs(Host r, boolean isHealthy, HashMap<StoragePool, List<Volume>> poolVolMap) {
         for (StoragePool pool : poolVolMap.keySet()) {
             if(Storage.StoragePoolType.NetworkFilesystem == pool.getPoolType()
-                    || Storage.StoragePoolType.ManagedNFS == pool.getPoolType()
                     || Storage.StoragePoolType.ManagedNFS == pool.getPoolType()) {
                 isHealthy = isAgentActive(r);
             }
@@ -198,13 +197,12 @@ public class KVMHostActivityChecker extends AdapterBase implements ActivityCheck
         if (agent.getHypervisorType() != Hypervisor.HypervisorType.KVM && agent.getHypervisorType() != Hypervisor.HypervisorType.LXC) {
             throw new IllegalStateException(String.format("Calling KVM investigator for non KVM Host of type [%s].", agent.getHypervisorType()));
         }
-        boolean activityStatus = false;
+        boolean activityStatus = true;
         HashMap<StoragePool, List<Volume>> poolVolMap = getVolumeUuidOnHost(agent);
         for (StoragePool pool : poolVolMap.keySet()) {
             if(Storage.StoragePoolType.NetworkFilesystem == pool.getPoolType()
-                    || Storage.StoragePoolType.ManagedNFS == pool.getPoolType()
                     || Storage.StoragePoolType.ManagedNFS == pool.getPoolType()) {
-                activityStatus = verifyActivityOfStorageOnHost(poolVolMap, pool, agent, suspectTime, activityStatus);
+                activityStatus = checkVmActivityOnStoragePool(poolVolMap, pool, agent, suspectTime);
                 if (!activityStatus) {
                     LOG.warn(String.format("It seems that the storage pool [%s] does not have activity on %s.", pool.getId(), agent.toString()));
                     break;
@@ -221,8 +219,8 @@ public class KVMHostActivityChecker extends AdapterBase implements ActivityCheck
         return activityStatus;
     }
 
-
-    protected boolean verifyActivityOfStorageOnHost(HashMap<StoragePool, List<Volume>> poolVolMap, StoragePool pool, Host agent, DateTime suspectTime, boolean activityStatus) throws HACheckerException, IllegalStateException {
+    private boolean checkVmActivityOnStoragePool(HashMap<StoragePool, List<Volume>> poolVolMap, StoragePool pool, Host agent, DateTime suspectTime) throws HACheckerException, IllegalStateException {
+        boolean activityStatus = true;
         List<Volume> volume_list = poolVolMap.get(pool);
         final CheckVMActivityOnStoragePoolCommand cmd = new CheckVMActivityOnStoragePoolCommand(agent, pool, volume_list, suspectTime);
 

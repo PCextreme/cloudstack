@@ -98,7 +98,7 @@ public class KvmHaAgentClient implements Configurable {
         return Integer.valueOf(responseInJson.get(VM_COUNT).getAsString());
     }
 
-    private int getKvmHaMicroservicePortValue() {
+    protected int getKvmHaMicroservicePortValue() {
         Integer haAgentPort = KVM_HA_WEBSERVICE_PORT.value();
         if (haAgentPort == null) {
             ClusterVO cluster = clusterDao.findById(agent.getClusterId());
@@ -179,7 +179,7 @@ public class KvmHaAgentClient implements Configurable {
     }
 
     /**
-     * Re-executes the HTTP GET request until it gets a response or it reaches the maximum request retries (#MAX_REQUEST_RETRIES)
+     * Re-executes the HTTP GET request until it gets a response or it reaches the maximum request retries {@link #MAX_REQUEST_RETRIES}
      */
     protected HttpResponse retryHttpRequest(String url, HttpRequestBase httpReq, HttpClient client) {
         LOGGER.warn(String.format("Failed to execute HTTP %s request [URL: %s]. Executing the request again.", httpReq.getMethod(), url));
@@ -224,7 +224,6 @@ public class KvmHaAgentClient implements Configurable {
 
     /**
      * Processes the response of request GET System ID as a JSON object.<br>
-     *
      * Json example: {"count": 3, "virtualmachines": ["r-123-VM", "v-134-VM", "s-111-VM"]}<br><br>
      *
      * Note: this method can return NULL JsonObject in case HttpResponse is NULL.

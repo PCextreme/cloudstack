@@ -98,22 +98,27 @@ public class KVMInvestigator extends AdapterBase implements Investigator {
             s_logger.debug(String.format("Agent investigation was requested on host %s, but host has no NFS storage. Skipping investigation via NFS.", agent));
         }
 
-        List<VMInstanceVO> vmsOnHost = vmInstanceDao.listByHostId(agent.getId());
-        KvmHaAgentClient kvmHaAgentClient = new KvmHaAgentClient(agent);
-        boolean isVmsOnKvmMatchingWithDatabase = kvmHaAgentClient.isKvmHaAgentHealthy(vmsOnHost.size());
-        if(isVmsOnKvmMatchingWithDatabase) {
-            agentStatus = Status.Up;
-            s_logger.debug(String.format("Checking agent %s status; KVM HA Agent is Running as expected."));
-        } else {
-            s_logger.warn(String.format("Checking agent %s status. Failed to check host status via KVM HA Agent"));
-        }
+        agentStatus = checkAgentStatusViaKvmHaAgent(agent, agentStatus);
 
         return agentStatus;
     }
 
     /**
-     * TODO
+     * It checks the KVM node healthy via KVM HA Agent. If the agent is healthy it returns Status.Up, otherwise it relies keeps the provided Status as it is.
      */
+    private Status checkAgentStatusViaKvmHaAgent(Host agent, Status agentStatus) {
+        List<VMInstanceVO> vmsOnHost = vmInstanceDao.listByHostId(agent.getId());
+        KvmHaAgentClient kvmHaAgentClient = new KvmHaAgentClient(agent);
+        boolean isVmsCountOnKvmMatchingWithDatabase = kvmHaAgentClient.isKvmHaAgentHealthy(vmsOnHost.size());
+        if(isVmsCountOnKvmMatchingWithDatabase) {
+            agentStatus = Status.Up;
+            s_logger.debug(String.format("Checking agent %s status; KVM HA Agent is Running as expected."));
+        } else {
+            s_logger.warn(String.format("Checking agent %s status. Failed to check host status via KVM HA Agent"));
+        }
+        return agentStatus;
+    }
+
     private Status checkAgentStatusViaNfs(Host agent) {
         Status hostStatus = null;
         Status neighbourStatus = null;
