@@ -16,6 +16,8 @@
 // under the License.
 package com.cloud.hypervisor.kvm.resource;
 
+import org.apache.commons.lang.StringUtils;
+
 public class LibvirtStoragePoolDef {
     public enum PoolType {
         ISCSI("iscsi"), NETFS("netfs"), LOGICAL("logical"), DIR("dir"), RBD("rbd"), GLUSTERFS("glusterfs"), POWERFLEX("powerflex");
@@ -55,8 +57,19 @@ public class LibvirtStoragePoolDef {
     private String _authUsername;
     private AuthenticationType _authType;
     private String _secretUuid;
+    private String nfsVersion;
 
-    public LibvirtStoragePoolDef(PoolType type, String poolName, String uuid, String host, int port, String dir, String targetPath) {
+    public LibvirtStoragePoolDef(PoolType type, String poolName, String uuid, String host, String dir, String targetPath, String nfsVersion) {
+        _poolType = type;
+        _poolName = poolName;
+        _uuid = uuid;
+        _sourceHost = host;
+        _sourceDir = dir;
+        _targetPath = targetPath;
+        this.nfsVersion = nfsVersion;
+    }
+
+    public LibvirtStoragePoolDef(PoolType type, String poolName, String uuid, String host, int port, String dir, String targetPath, String nfsVersion) {
         _poolType = type;
         _poolName = poolName;
         _uuid = uuid;
@@ -64,15 +77,7 @@ public class LibvirtStoragePoolDef {
         _sourcePort = port;
         _sourceDir = dir;
         _targetPath = targetPath;
-    }
-
-    public LibvirtStoragePoolDef(PoolType type, String poolName, String uuid, String host, String dir, String targetPath) {
-        _poolType = type;
-        _poolName = poolName;
-        _uuid = uuid;
-        _sourceHost = host;
-        _sourceDir = dir;
-        _targetPath = targetPath;
+        this.nfsVersion = nfsVersion;
     }
 
     public LibvirtStoragePoolDef(PoolType type, String poolName, String uuid, String sourceHost, int sourcePort, String dir, String authUsername, AuthenticationType authType,
@@ -124,6 +129,14 @@ public class LibvirtStoragePoolDef {
         return _authType;
     }
 
+    public String getNfsVersion() {
+        return nfsVersion;
+    }
+
+    public void setNfsVersion(String nfsVersion) {
+        this.nfsVersion = nfsVersion;
+    }
+
     @Override
     public String toString() {
         StringBuilder storagePoolBuilder = new StringBuilder();
@@ -143,6 +156,7 @@ public class LibvirtStoragePoolDef {
             storagePoolBuilder.append("<source>\n");
             storagePoolBuilder.append("<host name='" + _sourceHost + "'/>\n");
             storagePoolBuilder.append("<dir path='" + _sourceDir + "'/>\n");
+            appendNfsProtocolVersion(storagePoolBuilder);
             storagePoolBuilder.append("</source>\n");
         }
         if (_poolType == PoolType.RBD) {
@@ -176,6 +190,7 @@ public class LibvirtStoragePoolDef {
             storagePoolBuilder.append("<format type='");
             storagePoolBuilder.append(_poolType);
             storagePoolBuilder.append("'/>\n");
+            appendNfsProtocolVersion(storagePoolBuilder);
             storagePoolBuilder.append("</source>\n");
         }
         if (_poolType != PoolType.RBD && _poolType != PoolType.POWERFLEX) {
@@ -185,5 +200,13 @@ public class LibvirtStoragePoolDef {
         }
         storagePoolBuilder.append("</pool>\n");
         return storagePoolBuilder.toString();
+    }
+
+    private void appendNfsProtocolVersion(StringBuilder storagePoolBuilder) {
+        if (StringUtils.isNotBlank(nfsVersion)) {
+            storagePoolBuilder.append("<protocol ver='");
+            storagePoolBuilder.append(nfsVersion); //TODO
+            storagePoolBuilder.append("'/>\n");
+        }
     }
 }

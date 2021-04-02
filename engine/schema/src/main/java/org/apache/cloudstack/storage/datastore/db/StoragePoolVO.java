@@ -122,6 +122,9 @@ public class StoragePoolVO implements StoragePool {
     @Column(name = "parent")
     private Long parent = 0L;
 
+    @Column(name = "version")
+    private Long version;
+
     @Override
     public long getId() {
         return id;
@@ -386,6 +389,14 @@ public class StoragePoolVO implements StoragePool {
 
     public void setParent(Long parent) {
         this.parent = parent;
+    }
+
+    public void setVersion(Long version) {
+        this.version = version;
+    }
+
+    public Long getVersion() {
+        return version;
     }
 
     @Override

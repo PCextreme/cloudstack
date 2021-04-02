@@ -71,7 +71,7 @@ public class LibvirtStoragePoolXMLParser {
                     return new LibvirtStoragePoolDef(LibvirtStoragePoolDef.PoolType.valueOf(type.toUpperCase()), poolName, uuid, host, port, pool, authUsername,
                             LibvirtStoragePoolDef.AuthenticationType.valueOf(authType.toUpperCase()), uuid);
                 } else {
-                    return new LibvirtStoragePoolDef(LibvirtStoragePoolDef.PoolType.valueOf(type.toUpperCase()), poolName, uuid, host, port, pool, "");
+                    return new LibvirtStoragePoolDef(LibvirtStoragePoolDef.PoolType.valueOf(type.toUpperCase()), poolName, uuid, host, port, pool, "", null);
                 }
                 /* Gluster is a sub-type of LibvirtStoragePoolDef.poolType.NETFS, need to check format */
             } else if (format != null && format.equalsIgnoreCase("glusterfs")) {
@@ -88,15 +88,17 @@ public class LibvirtStoragePoolXMLParser {
                 if (portValue != null && !portValue.isEmpty())
                     port = Integer.parseInt(portValue);
 
-                return new LibvirtStoragePoolDef(LibvirtStoragePoolDef.PoolType.valueOf(format.toUpperCase()),
-                        poolName, uuid, host, port, path, targetPath);
+                String nfsVersion = getAttrValue("protocol", "ver", source);
+
+                return new LibvirtStoragePoolDef(LibvirtStoragePoolDef.PoolType.valueOf(format.toUpperCase()), poolName, uuid, host, port, path, targetPath, null);
             } else {
                 String path = getAttrValue("dir", "path", source);
 
                 Element target = (Element)rootElement.getElementsByTagName("target").item(0);
                 String targetPath = getTagValue("path", target);
+                String nfsVersion = getAttrValue("protocol", "ver", source);
 
-                return new LibvirtStoragePoolDef(LibvirtStoragePoolDef.PoolType.valueOf(type.toUpperCase()), poolName, uuid, host, path, targetPath);
+                return new LibvirtStoragePoolDef(LibvirtStoragePoolDef.PoolType.valueOf(type.toUpperCase()), poolName, uuid, host, path, targetPath, null);
             }
         } catch (ParserConfigurationException e) {
             s_logger.debug(e.toString());

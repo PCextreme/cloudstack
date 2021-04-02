@@ -64,6 +64,8 @@ import org.apache.cloudstack.engine.subsystem.api.storage.ZoneScope;
 import org.apache.cloudstack.storage.datastore.db.PrimaryDataStoreDao;
 import org.apache.cloudstack.storage.datastore.db.StoragePoolVO;
 import org.apache.cloudstack.storage.volume.datastore.PrimaryDataStoreHelper;
+import org.apache.http.NameValuePair;
+import org.apache.http.client.utils.URLEncodedUtils;
 import org.apache.log4j.Logger;
 
 import javax.inject.Inject;
@@ -71,6 +73,7 @@ import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLDecoder;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -122,6 +125,8 @@ public class CloudStackPrimaryDataStoreLifeCycleImpl implements PrimaryDataStore
     StoragePoolAutomation storagePoolAutmation;
     @Inject
     protected HostDao _hostDao;
+
+    private static final String NFS_VERSION_PARAM_NAME = "nfsvers";
 
     @SuppressWarnings("unchecked")
     @Override
@@ -362,6 +367,22 @@ public class CloudStackPrimaryDataStoreLifeCycleImpl implements PrimaryDataStore
 
         return dataStoreHelper.createPrimaryDataStore(parameters);
     }
+
+    /**
+     * TODO
+     */
+    private String retrieveNfsVersionNumber(String url) throws URISyntaxException {
+        String nfsVersion = null;
+        List<NameValuePair> params = URLEncodedUtils.parse(new URI(url), Charset.forName("UTF-8"));
+        for (NameValuePair nameValPair : params) {
+            if (NFS_VERSION_PARAM_NAME.equals(nameValPair.getName())) {
+                nfsVersion = nameValPair.getValue();
+            }
+        }
+        return nfsVersion;
+    }
+
+
 
     private void validateVcenterDetails(Long zoneId, Long podId, Long clusterId, String storageHost) {
 
