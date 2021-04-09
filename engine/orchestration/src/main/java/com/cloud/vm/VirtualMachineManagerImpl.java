@@ -3793,7 +3793,7 @@ public class VirtualMachineManagerImpl extends ManagerBase implements VirtualMac
     }
 
     private void checkIfNewOfferingStorageScopeMatchesStoragePool(VirtualMachine vmInstance, ServiceOffering newServiceOffering) {
-        boolean isRootVolumeOnLocalStorage = isRootVolumeOnLocalStorage(vmInstance);
+        boolean isRootVolumeOnLocalStorage = isRootVolumeOnLocalStorage(vmInstance.getId());
 
         if (newServiceOffering.isUseLocalStorage() && !isRootVolumeOnLocalStorage) {
             String message = String .format("Unable to upgrade virtual machine %s, target offering use local storage but the storage pool where "
@@ -3806,9 +3806,9 @@ public class VirtualMachineManagerImpl extends ManagerBase implements VirtualMac
         }
     }
 
-    private boolean isRootVolumeOnLocalStorage(VirtualMachine vmInstance) {
+    public boolean isRootVolumeOnLocalStorage(long vmId) {
         ScopeType poolScope = ScopeType.ZONE;
-        List<VolumeVO> volumes = _volsDao.findByInstanceAndType(vmInstance.getId(), Type.ROOT);
+        List<VolumeVO> volumes = _volsDao.findByInstanceAndType(vmId, Type.ROOT);
         if(CollectionUtils.isNotEmpty(volumes)) {
             VolumeVO rootDisk = volumes.get(0);
             Long poolId = rootDisk.getPoolId();
