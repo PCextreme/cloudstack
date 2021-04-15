@@ -3792,7 +3792,7 @@ public class VirtualMachineManagerImpl extends ManagerBase implements VirtualMac
         }
     }
 
-    private void checkIfNewOfferingStorageScopeMatchesStoragePool(VirtualMachine vmInstance, ServiceOffering newServiceOffering) {
+    protected void checkIfNewOfferingStorageScopeMatchesStoragePool(VirtualMachine vmInstance, ServiceOffering newServiceOffering) {
         boolean isRootVolumeOnLocalStorage = isRootVolumeOnLocalStorage(vmInstance.getId());
 
         if (newServiceOffering.isUseLocalStorage() && !isRootVolumeOnLocalStorage) {
