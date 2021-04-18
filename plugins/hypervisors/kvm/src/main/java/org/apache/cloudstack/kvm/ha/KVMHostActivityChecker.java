@@ -202,7 +202,7 @@ public class KVMHostActivityChecker extends AdapterBase implements ActivityCheck
         for (StoragePool pool : poolVolMap.keySet()) {
             if(Storage.StoragePoolType.NetworkFilesystem == pool.getPoolType()
                     || Storage.StoragePoolType.ManagedNFS == pool.getPoolType()) {
-                activityStatus = checkVmActivityOnStoragePool(poolVolMap, pool, agent, suspectTime);
+                activityStatus = checkVmActivityOnStoragePool(poolVolMap, pool, agent, suspectTime, activityStatus);
                 if (!activityStatus) {
                     LOG.warn(String.format("It seems that the storage pool [%s] does not have activity on %s.", pool.getId(), agent.toString()));
                     break;
@@ -219,8 +219,7 @@ public class KVMHostActivityChecker extends AdapterBase implements ActivityCheck
         return activityStatus;
     }
 
-    private boolean checkVmActivityOnStoragePool(HashMap<StoragePool, List<Volume>> poolVolMap, StoragePool pool, Host agent, DateTime suspectTime) throws HACheckerException, IllegalStateException {
-        boolean activityStatus = true;
+    private boolean checkVmActivityOnStoragePool(HashMap<StoragePool, List<Volume>> poolVolMap, StoragePool pool, Host agent, DateTime suspectTime, boolean activityStatus) throws HACheckerException, IllegalStateException {
         List<Volume> volume_list = poolVolMap.get(pool);
         final CheckVMActivityOnStoragePoolCommand cmd = new CheckVMActivityOnStoragePoolCommand(agent, pool, volume_list, suspectTime);
 
