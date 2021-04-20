@@ -21,8 +21,7 @@ import com.cloud.host.Host;
 import com.cloud.utils.exception.CloudRuntimeException;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import org.apache.cloudstack.framework.config.ConfigKey;
-import org.apache.cloudstack.framework.config.Configurable;
+import org.apache.cloudstack.kvm.ha.KVMHAConfig;
 import org.apache.commons.httpclient.HttpStatus;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
@@ -52,7 +51,7 @@ import java.util.concurrent.TimeUnit;
  * to this simple webserver and determine if the host is actually down
  * or if it is just the Java Agent which has crashed.
  */
-public class KvmHaAgentClient implements Configurable {
+public class KvmHaAgentClient {
 
     @Inject
     private ClusterDao clusterDao;
@@ -65,13 +64,13 @@ public class KvmHaAgentClient implements Configurable {
     private static final int MAX_REQUEST_RETRIES = 2;
     private Host agent;
 
-    public static final ConfigKey<Integer> KVM_HA_WEBSERVICE_PORT = new ConfigKey<Integer>("Advanced", Integer.class, "kvm.ha.webservice.port", "8080",
-            "It sets the port used to communicate with the KVM HA Agent Microservice that is running on KVM nodes. Default value is 8080.",
-            true);
-
-    public static final ConfigKey<Boolean> IS_KVM_HA_WEBSERVICE_ENABLED = new ConfigKey<Boolean>("Advanced", Boolean.class, "kvm.ha.webservice.enabled", "true",
-            "The KVM HA Webservice is executed on the KVM node and checks the amount of VMs running via libvirt. It serves as a HA health-check for KVM nodes. One can enable (set to 'true') or disable it ('false'). If disabled then CloudStack ignores HA validation via this agent.",
-            true);
+//    public static final ConfigKey<Integer> KVM_HA_WEBSERVICE_PORT = new ConfigKey<Integer>("Advanced", Integer.class, "kvm.ha.webservice.port", "8080",
+//            "It sets the port used to communicate with the KVM HA Agent Microservice that is running on KVM nodes. Default value is 8080.",
+//            true);
+//
+//    public static final ConfigKey<Boolean> IS_KVM_HA_WEBSERVICE_ENABLED = new ConfigKey<Boolean>("Advanced", Boolean.class, "kvm.ha.webservice.enabled", "true",
+//            "The KVM HA Webservice is executed on the KVM node and checks the amount of VMs running via libvirt. It serves as a HA health-check for KVM nodes. One can enable (set to 'true') or disable it ('false'). If disabled then CloudStack ignores HA validation via this agent.",
+//            true);
 
     /**
      * Instantiates a webclient that checks, via a webserver running on the KVM host, the VMs running
@@ -95,15 +94,15 @@ public class KvmHaAgentClient implements Configurable {
             return ERROR_CODE;
         }
 
-        return Integer.valueOf(responseInJson.get(VM_COUNT).getAsString());
+        return responseInJson.get(VM_COUNT).getAsInt();
     }
 
     protected int getKvmHaMicroservicePortValue() {
-        Integer haAgentPort = KVM_HA_WEBSERVICE_PORT.value();
+        Integer haAgentPort = KVMHAConfig.KVM_HA_WEBSERVICE_PORT.value();
         if (haAgentPort == null) {
             ClusterVO cluster = clusterDao.findById(agent.getClusterId());
-            LOGGER.warn(String.format("Using default kvm.ha.webservice.port: %s as it was set to NULL for cluster [id: %d, name: %s].", KVM_HA_WEBSERVICE_PORT.defaultValue(), cluster.getId(), cluster.getName()));
-            haAgentPort = Integer.parseInt(KVM_HA_WEBSERVICE_PORT.defaultValue());
+            LOGGER.warn(String.format("Using default kvm.ha.webservice.port: %s as it was set to NULL for cluster [id: %d, name: %s].", KVMHAConfig.KVM_HA_WEBSERVICE_PORT.defaultValue(), cluster.getId(), cluster.getName()));
+            haAgentPort = Integer.parseInt(KVMHAConfig.KVM_HA_WEBSERVICE_PORT.defaultValue());
         }
         return haAgentPort;
     }
@@ -112,7 +111,7 @@ public class KvmHaAgentClient implements Configurable {
      * Checks if the KVM HA Webservice is enabled or not; if disabled then CloudStack ignores HA validation via the webservice.
      */
     public boolean isKvmHaWebserviceEnabled() {
-        return IS_KVM_HA_WEBSERVICE_ENABLED.value();
+        return KVMHAConfig.IS_KVM_HA_WEBSERVICE_ENABLED.value();
     }
 
     /**
@@ -126,19 +125,21 @@ public class KvmHaAgentClient implements Configurable {
         int numberOfVmsOnAgent = countRunningVmsOnAgent();
 
         if (numberOfVmsOnAgent < 0) {
-            LOGGER.error("KVM HA Agent health check failed, either the KVM Agent is unreachable or Libvirt validation failed");
+            LOGGER.error(String.format("KVM HA Agent health check failed, either the KVM Agent [%s] is unreachable or Libvirt validation failed", agent));
             return false;
-        } if (expectedNumberOfVms == numberOfVmsOnAgent) {
+        }
+        if (expectedNumberOfVms == numberOfVmsOnAgent) {
             return true;
-        } if (numberOfVmsOnAgent == 0) {
+        }
+        if (numberOfVmsOnAgent == 0) {
             // Return false as could not find VMs running but it expected at least one VM running, fencing/recovering host would avoid downtime to VMs in this case.
-            LOGGER.warn(String.format("KVM HA Agent could not find running VMs; it was expected to list %d running VMs.", expectedNumberOfVms));
+            LOGGER.warn(String.format("KVM HA Agent [%s] could not find running VMs; it was expected to list %d running VMs.", agent, expectedNumberOfVms));
             return false;
         }
         // In order to have a less "aggressive" health-check, the KvmHaAgentClient will not return false; fencing/recovering could bring downtime to existing VMs
         // Additionally, the inconsistency can also be due to jobs in progress to migrate/stop/start VMs
         // Either way, WARN messages should be presented to Admins so they can look closely to what is happening on the host
-        LOGGER.warn(String.format("KVM HA Agent listed %d running VMs; however, it was expected %d running VMs.", numberOfVmsOnAgent, expectedNumberOfVms));
+        LOGGER.warn(String.format("KVM HA Agent [%s] listed %d running VMs; however, it was expected %d running VMs.", agent, numberOfVmsOnAgent, expectedNumberOfVms));
         return true;
     }
 
@@ -244,15 +245,4 @@ public class KvmHaAgentClient implements Configurable {
 
         return new JsonParser().parse(jsonString).getAsJsonObject();
     }
-
-    @Override
-    public String getConfigComponentName() {
-        return KvmHaAgentClient.class.getSimpleName();
-    }
-
-    @Override
-    public ConfigKey<?>[] getConfigKeys() {
-        return new ConfigKey<?>[] { KVM_HA_WEBSERVICE_PORT, IS_KVM_HA_WEBSERVICE_ENABLED };
-    }
-
 }
