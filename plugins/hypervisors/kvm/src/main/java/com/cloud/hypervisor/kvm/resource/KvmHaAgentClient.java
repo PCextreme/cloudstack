@@ -19,6 +19,7 @@ import com.cloud.dc.ClusterVO;
 import com.cloud.dc.dao.ClusterDao;
 import com.cloud.host.Host;
 import com.cloud.utils.exception.CloudRuntimeException;
+import com.cloud.vm.dao.VMInstanceDao;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.apache.cloudstack.kvm.ha.KVMHAConfig;
@@ -55,6 +56,8 @@ public class KvmHaAgentClient {
 
     @Inject
     private ClusterDao clusterDao;
+    @Inject
+    private VMInstanceDao vmInstanceDao;
 
     private static final Logger LOGGER = Logger.getLogger(KvmHaAgentClient.class);
     private final static int WAIT_FOR_REQUEST_RETRY = 2;
@@ -63,14 +66,6 @@ public class KvmHaAgentClient {
     private final static String EXPECTED_HTTP_STATUS = "2XX";
     private static final int MAX_REQUEST_RETRIES = 2;
     private Host agent;
-
-//    public static final ConfigKey<Integer> KVM_HA_WEBSERVICE_PORT = new ConfigKey<Integer>("Advanced", Integer.class, "kvm.ha.webservice.port", "8080",
-//            "It sets the port used to communicate with the KVM HA Agent Microservice that is running on KVM nodes. Default value is 8080.",
-//            true);
-//
-//    public static final ConfigKey<Boolean> IS_KVM_HA_WEBSERVICE_ENABLED = new ConfigKey<Boolean>("Advanced", Boolean.class, "kvm.ha.webservice.enabled", "true",
-//            "The KVM HA Webservice is executed on the KVM node and checks the amount of VMs running via libvirt. It serves as a HA health-check for KVM nodes. One can enable (set to 'true') or disable it ('false'). If disabled then CloudStack ignores HA validation via this agent.",
-//            true);
 
     /**
      * Instantiates a webclient that checks, via a webserver running on the KVM host, the VMs running

@@ -31,6 +31,7 @@ import com.cloud.resource.ResourceManager;
 import com.cloud.storage.Storage.StoragePoolType;
 import com.cloud.utils.component.AdapterBase;
 import com.cloud.vm.VMInstanceVO;
+import com.cloud.vm.VirtualMachine;
 import com.cloud.vm.dao.VMInstanceDao;
 import org.apache.cloudstack.ha.HAManager;
 import org.apache.cloudstack.storage.datastore.db.PrimaryDataStoreDao;
@@ -107,9 +108,10 @@ public class KVMInvestigator extends AdapterBase implements Investigator {
      * It checks the KVM node healthy via KVM HA Agent. If the agent is healthy it returns Status.Up, otherwise it relies keeps the provided Status as it is.
      */
     private Status checkAgentStatusViaKvmHaAgent(Host agent, Status agentStatus) {
-        List<VMInstanceVO> vmsOnHost = vmInstanceDao.listByHostId(agent.getId());
         KvmHaAgentClient kvmHaAgentClient = new KvmHaAgentClient(agent);
-        boolean isVmsCountOnKvmMatchingWithDatabase = kvmHaAgentClient.isKvmHaAgentHealthy(vmsOnHost.size());
+
+        List<VMInstanceVO> vmsRunningOnHost = vmInstanceDao.listByHostAndState(agent.getId(), VirtualMachine.State.Running);
+        boolean isVmsCountOnKvmMatchingWithDatabase = kvmHaAgentClient.isKvmHaAgentHealthy(vmsRunningOnHost.size());
         if(isVmsCountOnKvmMatchingWithDatabase) {
             agentStatus = Status.Up;
             s_logger.debug(String.format("Checking agent %s status; KVM HA Agent is Running as expected."));
