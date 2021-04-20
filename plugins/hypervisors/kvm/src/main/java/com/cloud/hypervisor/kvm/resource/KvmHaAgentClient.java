@@ -67,11 +67,11 @@ public class KvmHaAgentClient implements Configurable {
 
     public static final ConfigKey<Integer> KVM_HA_WEBSERVICE_PORT = new ConfigKey<Integer>("Advanced", Integer.class, "kvm.ha.webservice.port", "8080",
             "It sets the port used to communicate with the KVM HA Agent Microservice that is running on KVM nodes. Default value is 8080.",
-            true, ConfigKey.Scope.Cluster);
+            true);
 
     public static final ConfigKey<Boolean> IS_KVM_HA_WEBSERVICE_ENABLED = new ConfigKey<Boolean>("Advanced", Boolean.class, "kvm.ha.webservice.enabled", "true",
             "The KVM HA Webservice is executed on the KVM node and checks the amount of VMs running via libvirt. It serves as a HA health-check for KVM nodes. One can enable (set to 'true') or disable it ('false'). If disabled then CloudStack ignores HA validation via this agent.",
-            true, ConfigKey.Scope.Cluster);
+            true);
 
     /**
      * Instantiates a webclient that checks, via a webserver running on the KVM host, the VMs running
