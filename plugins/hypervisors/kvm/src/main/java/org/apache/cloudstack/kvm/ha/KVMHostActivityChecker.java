@@ -111,7 +111,9 @@ public class KVMHostActivityChecker extends AdapterBase implements ActivityCheck
             return isHealthy;
         }
 
-        List<VMInstanceVO> vmsRunningOnHost = vmInstanceDao.listByHostAndState(r.getId(), VirtualMachine.State.Running);
+        List<VMInstanceVO> listByHostAndState = vmInstanceDao.listByHostAndState(r.getId(), VirtualMachine.State.Running);
+        List<VMInstanceVO> vmsRunningOnHost = vmInstanceDao.listByHostId(r.getId());
+        LOG.debug(String.format("listByHostAndState %d VMs & listByHostId %d VMs", listByHostAndState.size(), vmsRunningOnHost.size()));
         boolean isKvmHaAgentHealthy = kvmHaAgentClient.isKvmHaAgentHealthy(vmsRunningOnHost.size());
 
         if (!isHealthy && isKvmHaAgentHealthy) {
