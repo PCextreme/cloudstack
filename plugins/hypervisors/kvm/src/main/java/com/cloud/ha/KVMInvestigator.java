@@ -26,14 +26,12 @@ import com.cloud.host.HostVO;
 import com.cloud.host.Status;
 import com.cloud.host.dao.HostDao;
 import com.cloud.hypervisor.Hypervisor;
-import com.cloud.hypervisor.kvm.resource.KvmHaAgentClient;
 import com.cloud.resource.ResourceManager;
 import com.cloud.storage.Storage.StoragePoolType;
 import com.cloud.utils.component.AdapterBase;
-import com.cloud.vm.VMInstanceVO;
-import com.cloud.vm.VirtualMachine;
 import com.cloud.vm.dao.VMInstanceDao;
 import org.apache.cloudstack.ha.HAManager;
+import org.apache.cloudstack.kvm.ha.KvmHaAgentClient;
 import org.apache.cloudstack.storage.datastore.db.PrimaryDataStoreDao;
 import org.apache.cloudstack.storage.datastore.db.StoragePoolVO;
 import org.apache.log4j.Logger;
@@ -110,10 +108,10 @@ public class KVMInvestigator extends AdapterBase implements Investigator {
     private Status checkAgentStatusViaKvmHaAgent(Host agent, Status agentStatus) {
         KvmHaAgentClient kvmHaAgentClient = new KvmHaAgentClient(agent);
 
-        List<VMInstanceVO> listByHostAndState = vmInstanceDao.listByHostAndState(agent.getId(), VirtualMachine.State.Running);
-        List<VMInstanceVO> vmsRunningOnHost = vmInstanceDao.listByHostId(agent.getId());
-        s_logger.debug(String.format("listByHostAndState %d VMs & listByHostId %d VMs", listByHostAndState.size(), vmsRunningOnHost.size()));
-        boolean isVmsCountOnKvmMatchingWithDatabase = kvmHaAgentClient.isKvmHaAgentHealthy(vmsRunningOnHost.size());
+//        TODO Remove
+//        List<VMInstanceVO> vmsOnHost = kvmHaAgentClient.listVmsRunningMigratingStopping(agent);
+//        boolean isVmsCountOnKvmMatchingWithDatabase = kvmHaAgentClient.isKvmHaAgentHealthy(vmsOnHost.size());
+        boolean isVmsCountOnKvmMatchingWithDatabase = kvmHaAgentClient.isKvmHaAgentHealthy(agent, vmInstanceDao);
         if(isVmsCountOnKvmMatchingWithDatabase) {
             agentStatus = Status.Up;
             s_logger.debug(String.format("Checking agent %s status; KVM HA Agent is Running as expected."));

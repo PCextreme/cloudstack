@@ -28,7 +28,6 @@ import com.cloud.host.Host;
 import com.cloud.host.HostVO;
 import com.cloud.host.Status;
 import com.cloud.hypervisor.Hypervisor;
-import com.cloud.hypervisor.kvm.resource.KvmHaAgentClient;
 import com.cloud.resource.ResourceManager;
 import com.cloud.storage.Storage;
 import com.cloud.storage.StorageManager;
@@ -52,6 +51,7 @@ import java.util.ArrayList;
 import org.joda.time.DateTime;
 import java.util.HashMap;
 import java.util.List;
+
 
 public class KVMHostActivityChecker extends AdapterBase implements ActivityCheckerInterface<Host>, HealthCheckerInterface<Host> {
     private final static Logger LOG = Logger.getLogger(KVMHostActivityChecker.class);
@@ -111,10 +111,11 @@ public class KVMHostActivityChecker extends AdapterBase implements ActivityCheck
             return isHealthy;
         }
 
-        List<VMInstanceVO> listByHostAndState = vmInstanceDao.listByHostAndState(r.getId(), VirtualMachine.State.Running);
-        List<VMInstanceVO> vmsRunningOnHost = vmInstanceDao.listByHostId(r.getId());
-        LOG.debug(String.format("listByHostAndState %d VMs & listByHostId %d VMs", listByHostAndState.size(), vmsRunningOnHost.size()));
-        boolean isKvmHaAgentHealthy = kvmHaAgentClient.isKvmHaAgentHealthy(vmsRunningOnHost.size());
+//        List<VMInstanceVO> vmsOnHost = kvmHaAgentClient.listVmsRunningMigratingStopping(r);
+//        List<VMInstanceVO> vmsOnHost = vmInstanceDao.listByHostAndState(r.getId(), VirtualMachine.State.Running);
+//        vmsOnHost.addAll(vmInstanceDao.listByHostAndState(r.getId(), VirtualMachine.State.Stopping));
+//        vmsOnHost.addAll(vmInstanceDao.listByHostAndState(r.getId(), VirtualMachine.State.Migrating));
+        boolean isKvmHaAgentHealthy = kvmHaAgentClient.isKvmHaAgentHealthy(r, vmInstanceDao);
 
         if (!isHealthy && isKvmHaAgentHealthy) {
             isHealthy = true;

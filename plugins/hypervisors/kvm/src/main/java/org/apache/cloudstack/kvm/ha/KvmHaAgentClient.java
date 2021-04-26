@@ -13,16 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.cloud.hypervisor.kvm.resource;
+package org.apache.cloudstack.kvm.ha;
 
 import com.cloud.dc.ClusterVO;
 import com.cloud.dc.dao.ClusterDao;
 import com.cloud.host.Host;
 import com.cloud.utils.exception.CloudRuntimeException;
+import com.cloud.vm.VMInstanceVO;
+import com.cloud.vm.VirtualMachine;
 import com.cloud.vm.dao.VMInstanceDao;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import org.apache.cloudstack.kvm.ha.KVMHAConfig;
 import org.apache.commons.httpclient.HttpStatus;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
@@ -40,6 +41,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -56,14 +59,12 @@ public class KvmHaAgentClient {
 
     @Inject
     private ClusterDao clusterDao;
-    @Inject
-    private VMInstanceDao vmInstanceDao;
 
     private static final Logger LOGGER = Logger.getLogger(KvmHaAgentClient.class);
-    private final static int WAIT_FOR_REQUEST_RETRY = 2;
-    private final static String VM_COUNT = "count";
     private final static int ERROR_CODE = -1;
     private final static String EXPECTED_HTTP_STATUS = "2XX";
+    private final static String VM_COUNT = "count";
+    private final static int WAIT_FOR_REQUEST_RETRY = 2;
     private static final int MAX_REQUEST_RETRIES = 2;
     private Host agent;
 
@@ -72,6 +73,10 @@ public class KvmHaAgentClient {
      */
     public KvmHaAgentClient(Host agent) {
         this.agent = agent;
+    }
+
+    public KvmHaAgentClient() {
+
     }
 
     /**
@@ -106,7 +111,32 @@ public class KvmHaAgentClient {
      * Checks if the KVM HA Webservice is enabled or not; if disabled then CloudStack ignores HA validation via the webservice.
      */
     public boolean isKvmHaWebserviceEnabled() {
-        return KVMHAConfig.IS_KVM_HA_WEBSERVICE_ENABLED.value();
+        return KVMHAConfig.KVM_HA_WEBSERVICE_ENABLED.value();
+    }
+
+    public List<VMInstanceVO> listVmsOnHost(Host host, VMInstanceDao vmInstanceDao) {
+        List<VMInstanceVO> listByHostAndStateStarting = vmInstanceDao.listByHostAndState(host.getId(), VirtualMachine.State.Starting);
+        int startingVMs = listByHostAndStateStarting.size();
+
+        List<VMInstanceVO> listByHostAndStateRunning = vmInstanceDao.listByHostAndState(host.getId(), VirtualMachine.State.Running);
+        int runningVMs = listByHostAndStateRunning.size();
+
+        List<VMInstanceVO> listByHostAndStateStopping = vmInstanceDao.listByHostAndState(host.getId(), VirtualMachine.State.Stopping);
+        int stoppingVms = listByHostAndStateStopping.size();
+
+        List<VMInstanceVO> listByHostAndStateMigrating = vmInstanceDao.listByHostAndState(host.getId(), VirtualMachine.State.Migrating);
+        int migratingVms = listByHostAndStateMigrating.size();
+
+        List<VMInstanceVO> listByHostAndState = new ArrayList<>();
+        listByHostAndState.addAll(listByHostAndStateStarting);
+        listByHostAndState.addAll(listByHostAndStateRunning);
+        listByHostAndState.addAll(listByHostAndStateStopping);
+        listByHostAndState.addAll(listByHostAndStateMigrating);
+
+        LOGGER.debug(String.format("listVmsRunningMigratingStopping: %d Starting, %d Running, %d Stopping, %d Migrating. Total on host: %d", startingVMs, runningVMs, stoppingVms, migratingVms,
+                listByHostAndState.size()));
+
+        return listByHostAndState;
     }
 
     /**
@@ -116,7 +146,9 @@ public class KvmHaAgentClient {
      *  (i) expected VMs running but listed 0 VMs: returns false as could not find VMs running but it expected at least one VM running, fencing/recovering host would avoid downtime to VMs in this case.<br>
      *  (ii) amount of listed VMs is different than expected: return true and print WARN messages so Admins can look closely to what is happening on the host
      */
-    public boolean isKvmHaAgentHealthy(int expectedNumberOfVms) {
+    public boolean isKvmHaAgentHealthy(Host host, VMInstanceDao vmInstanceDao) {
+        int expectedNumberOfVms = listVmsOnHost(host, vmInstanceDao).size();
+
         int numberOfVmsOnAgent = countRunningVmsOnAgent();
 
         if (numberOfVmsOnAgent < 0) {
@@ -128,13 +160,13 @@ public class KvmHaAgentClient {
         }
         if (numberOfVmsOnAgent == 0) {
             // Return false as could not find VMs running but it expected at least one VM running, fencing/recovering host would avoid downtime to VMs in this case.
-            LOGGER.warn(String.format("KVM HA Agent [%s] could not find running VMs; it was expected to list %d running VMs.", agent, expectedNumberOfVms));
+            LOGGER.warn(String.format("KVM HA Agent could not find VMs on [%s]; it was expected to list %d VMs.", agent, expectedNumberOfVms));
             return false;
         }
         // In order to have a less "aggressive" health-check, the KvmHaAgentClient will not return false; fencing/recovering could bring downtime to existing VMs
         // Additionally, the inconsistency can also be due to jobs in progress to migrate/stop/start VMs
         // Either way, WARN messages should be presented to Admins so they can look closely to what is happening on the host
-        LOGGER.warn(String.format("KVM HA Agent [%s] listed %d running VMs; however, it was expected %d running VMs.", agent, numberOfVmsOnAgent, expectedNumberOfVms));
+        LOGGER.warn(String.format("KVM HA Agent listed %d VMs on [%s]; however, it was expected %d VMs.", agent, numberOfVmsOnAgent, expectedNumberOfVms));
         return true;
     }
 
@@ -205,9 +237,7 @@ public class KvmHaAgentClient {
                 return client.execute(httpReq);
             } catch (IOException | InterruptedException e) {
                 if (attempt == MAX_REQUEST_RETRIES) {
-                    LOGGER.error(
-                            String.format("Failed to execute HTTP %s request retry attempt %d/%d [URL: %s] due to exception %s", httpReq.getMethod(), attempt, MAX_REQUEST_RETRIES,
-                                    url, e));
+                    throw new CloudRuntimeException(String.format("Failed to execute HTTP %s request retry attempt %d/%d [URL: %s] due to exception %s", httpReq.getMethod(), attempt, MAX_REQUEST_RETRIES, url, e));
                 } else {
                     LOGGER.error(
                             String.format("Failed to execute HTTP %s request retry attempt %d/%d [URL: %s] due to exception %s", httpReq.getMethod(), attempt, MAX_REQUEST_RETRIES,
