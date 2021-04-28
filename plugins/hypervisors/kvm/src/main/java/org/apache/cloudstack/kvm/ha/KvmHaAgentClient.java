@@ -15,8 +15,6 @@
  */
 package org.apache.cloudstack.kvm.ha;
 
-import com.cloud.dc.ClusterVO;
-import com.cloud.dc.dao.ClusterDao;
 import com.cloud.host.Host;
 import com.cloud.utils.exception.CloudRuntimeException;
 import com.cloud.vm.VMInstanceVO;
@@ -34,7 +32,6 @@ import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
 
-import javax.inject.Inject;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -57,15 +54,13 @@ import java.util.concurrent.TimeUnit;
  */
 public class KvmHaAgentClient {
 
-    @Inject
-    private ClusterDao clusterDao;
-
     private static final Logger LOGGER = Logger.getLogger(KvmHaAgentClient.class);
-    private final static int ERROR_CODE = -1;
-    private final static String EXPECTED_HTTP_STATUS = "2XX";
-    private final static String VM_COUNT = "count";
-    private final static int WAIT_FOR_REQUEST_RETRY = 2;
+    private static final int ERROR_CODE = -1;
+    private static final String EXPECTED_HTTP_STATUS = "2XX";
+    private static final String VM_COUNT = "count";
+    private static final int WAIT_FOR_REQUEST_RETRY = 2;
     private static final int MAX_REQUEST_RETRIES = 2;
+    private static final int CAUTIOUS_MARGIN_OF_VMS_ON_HOST = 1;
     private Host agent;
 
     /**
@@ -73,10 +68,6 @@ public class KvmHaAgentClient {
      */
     public KvmHaAgentClient(Host agent) {
         this.agent = agent;
-    }
-
-    public KvmHaAgentClient() {
-
     }
 
     /**
@@ -100,8 +91,7 @@ public class KvmHaAgentClient {
     protected int getKvmHaMicroservicePortValue() {
         Integer haAgentPort = KVMHAConfig.KVM_HA_WEBSERVICE_PORT.value();
         if (haAgentPort == null) {
-            ClusterVO cluster = clusterDao.findById(agent.getClusterId());
-            LOGGER.warn(String.format("Using default kvm.ha.webservice.port: %s as it was set to NULL for cluster [id: %d, name: %s].", KVMHAConfig.KVM_HA_WEBSERVICE_PORT.defaultValue(), cluster.getId(), cluster.getName()));
+            LOGGER.warn(String.format("Using default kvm.ha.webservice.port: %s as it was set to NULL for the cluster [id: %d] from %s.", KVMHAConfig.KVM_HA_WEBSERVICE_PORT.defaultValue(), agent.getClusterId(), agent));
             haAgentPort = Integer.parseInt(KVMHAConfig.KVM_HA_WEBSERVICE_PORT.defaultValue());
         }
         return haAgentPort;
@@ -114,27 +104,35 @@ public class KvmHaAgentClient {
         return KVMHAConfig.KVM_HA_WEBSERVICE_ENABLED.value();
     }
 
-    public List<VMInstanceVO> listVmsOnHost(Host host, VMInstanceDao vmInstanceDao) {
-        List<VMInstanceVO> listByHostAndStateStarting = vmInstanceDao.listByHostAndState(host.getId(), VirtualMachine.State.Starting);
-        int startingVMs = listByHostAndStateStarting.size();
-
+    /**
+     * Lists VMs on host according to vm_instance DB table. The states considered for such listing are: 'Running', 'Stopping', 'Migrating'.
+     * <br>
+     * <br>
+     * Note that VMs on state 'Starting' are not common to be at the host, therefore this method does not list them.
+     * However, there is still a probability of a VM in 'Starting' state be already listed on the KVM via '$virsh list',
+     * but that's not likely and thus it is not relevant for this very context.
+     */
+    protected List<VMInstanceVO> listVmsOnHost(Host host, VMInstanceDao vmInstanceDao) {
         List<VMInstanceVO> listByHostAndStateRunning = vmInstanceDao.listByHostAndState(host.getId(), VirtualMachine.State.Running);
-        int runningVMs = listByHostAndStateRunning.size();
-
         List<VMInstanceVO> listByHostAndStateStopping = vmInstanceDao.listByHostAndState(host.getId(), VirtualMachine.State.Stopping);
-        int stoppingVms = listByHostAndStateStopping.size();
-
         List<VMInstanceVO> listByHostAndStateMigrating = vmInstanceDao.listByHostAndState(host.getId(), VirtualMachine.State.Migrating);
-        int migratingVms = listByHostAndStateMigrating.size();
 
         List<VMInstanceVO> listByHostAndState = new ArrayList<>();
-        listByHostAndState.addAll(listByHostAndStateStarting);
         listByHostAndState.addAll(listByHostAndStateRunning);
         listByHostAndState.addAll(listByHostAndStateStopping);
         listByHostAndState.addAll(listByHostAndStateMigrating);
 
-        LOGGER.debug(String.format("listVmsRunningMigratingStopping: %d Starting, %d Running, %d Stopping, %d Migrating. Total on host: %d", startingVMs, runningVMs, stoppingVms, migratingVms,
-                listByHostAndState.size()));
+        if (LOGGER.isTraceEnabled()) {
+            List<VMInstanceVO> listByHostAndStateStarting = vmInstanceDao.listByHostAndState(host.getId(), VirtualMachine.State.Starting);
+            int startingVMs = listByHostAndStateStarting.size();
+            int runningVMs = listByHostAndStateRunning.size();
+            int stoppingVms = listByHostAndStateStopping.size();
+            int migratingVms = listByHostAndStateMigrating.size();
+            int countRunningVmsOnAgent = countRunningVmsOnAgent();
+            LOGGER.trace(
+                    String.format("%s has (%d Starting) %d Running, %d Stopping, %d Migrating. Total listed via DB %d / %d (via libvirt)", agent.getName(), startingVMs, runningVMs, stoppingVms,
+                            migratingVms, listByHostAndState.size(), countRunningVmsOnAgent));
+        }
 
         return listByHostAndState;
     }
@@ -143,30 +141,32 @@ public class KvmHaAgentClient {
      *  Returns true in case of the expected number of VMs matches with the VMs running on the KVM host according to Libvirt. <br><br>
      *
      *  IF: <br>
-     *  (i) expected VMs running but listed 0 VMs: returns false as could not find VMs running but it expected at least one VM running, fencing/recovering host would avoid downtime to VMs in this case.<br>
-     *  (ii) amount of listed VMs is different than expected: return true and print WARN messages so Admins can look closely to what is happening on the host
+     *  (i) KVM HA agent finds 0 running but CloudStack considers that the host has 2 or more VMs running: returns false as could not find VMs running but it expected at least 2 VMs running, fencing/recovering host would avoid downtime to VMs in this case.<br>
+     *  (ii) amount of listed VMs is different than expected: return true and print WARN messages so Admins can monitor and react accordingly
      */
     public boolean isKvmHaAgentHealthy(Host host, VMInstanceDao vmInstanceDao) {
-        int expectedNumberOfVms = listVmsOnHost(host, vmInstanceDao).size();
+        int numberOfVmsOnHostAccordingToDB = listVmsOnHost(host, vmInstanceDao).size();
 
         int numberOfVmsOnAgent = countRunningVmsOnAgent();
 
         if (numberOfVmsOnAgent < 0) {
-            LOGGER.error(String.format("KVM HA Agent health check failed, either the KVM Agent [%s] is unreachable or Libvirt validation failed", agent));
+            LOGGER.error(String.format("KVM HA Agent health check failed, either the KVM Agent %s is unreachable or Libvirt validation failed", agent));
+            LOGGER.warn(String.format("Host %s is not considered healthy and HA fencing/recovering process might be triggered.", agent.getName(), numberOfVmsOnHostAccordingToDB));
             return false;
         }
-        if (expectedNumberOfVms == numberOfVmsOnAgent) {
+        if (numberOfVmsOnHostAccordingToDB == numberOfVmsOnAgent) {
             return true;
         }
         if (numberOfVmsOnAgent == 0) {
             // Return false as could not find VMs running but it expected at least one VM running, fencing/recovering host would avoid downtime to VMs in this case.
-            LOGGER.warn(String.format("KVM HA Agent could not find VMs on [%s]; it was expected to list %d VMs.", agent, expectedNumberOfVms));
+            LOGGER.warn(String.format("KVM HA Agent %s could not find VMs; it was expected to list %d VMs.", agent, numberOfVmsOnHostAccordingToDB));
+            LOGGER.warn(String.format("Host %s is not considered healthy and HA fencing/recovering process might be triggered.", agent.getName(), numberOfVmsOnHostAccordingToDB));
             return false;
         }
         // In order to have a less "aggressive" health-check, the KvmHaAgentClient will not return false; fencing/recovering could bring downtime to existing VMs
         // Additionally, the inconsistency can also be due to jobs in progress to migrate/stop/start VMs
         // Either way, WARN messages should be presented to Admins so they can look closely to what is happening on the host
-        LOGGER.warn(String.format("KVM HA Agent listed %d VMs on [%s]; however, it was expected %d VMs.", agent, numberOfVmsOnAgent, expectedNumberOfVms));
+        LOGGER.warn(String.format("KVM HA Agent %s listed %d VMs; however, it was expected %d VMs.", agent, numberOfVmsOnAgent, numberOfVmsOnHostAccordingToDB));
         return true;
     }
 

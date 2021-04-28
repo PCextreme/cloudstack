@@ -129,10 +129,6 @@ public final class KVMHAProvider extends HAAbstractHostProvider implements HAPro
                 return KVMHAConfig.KvmHARecoverAttemptThreshold.valueIn(clusterId);
             case MaxDegradedWaitTimeout:
                 return KVMHAConfig.KvmHADegradedMaxPeriod.valueIn(clusterId);
-            case KVM_HA_WEBSERVICE_PORT:
-                return KVMHAConfig.KVM_HA_WEBSERVICE_PORT.valueIn(clusterId);
-            case IS_KVM_HA_WEBSERVICE_ENABLED:
-                return KVMHAConfig.KVM_HA_WEBSERVICE_ENABLED.valueIn(clusterId);
             default:
                 throw new InvalidParameterException("Unknown HAProviderConfig " + name.toString());
         }
