@@ -95,8 +95,9 @@ public class LibvirtStoragePoolXMLParser {
 
                 Element target = (Element)rootElement.getElementsByTagName("target").item(0);
                 String targetPath = getTagValue("path", target);
+                String protocolVersion = getAttrValue("protocol", "ver", source);
 
-                return new LibvirtStoragePoolDef(LibvirtStoragePoolDef.PoolType.valueOf(type.toUpperCase()), poolName, uuid, host, path, targetPath);
+                return new LibvirtStoragePoolDef(LibvirtStoragePoolDef.PoolType.valueOf(type.toUpperCase()), poolName, uuid, host, path, targetPath, protocolVersion);
             }
         } catch (ParserConfigurationException e) {
             s_logger.debug(e.toString());

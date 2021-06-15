@@ -106,7 +106,7 @@ public class ManagedNfsStorageAdaptor implements StorageAdaptor {
             }
 
             targetPath = "/mnt" + volumeUuid;
-            spd = new LibvirtStoragePoolDef(PoolType.NETFS, volumeUuid, details.get(DiskTO.UUID), pool.getSourceHost(), details.get(DiskTO.MOUNT_POINT), targetPath);
+            spd = new LibvirtStoragePoolDef(PoolType.NETFS, volumeUuid, details.get(DiskTO.UUID), pool.getSourceHost(), details.get(DiskTO.MOUNT_POINT), targetPath, null);
             _storageLayer.mkdir(targetPath);
 
             s_logger.debug(spd.toString());

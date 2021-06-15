@@ -26,6 +26,7 @@ import java.util.Map;
 
 import javax.inject.Inject;
 
+import com.cloud.utils.StringUtils;
 import org.apache.log4j.Logger;
 import org.springframework.stereotype.Component;
 
@@ -94,7 +95,10 @@ public class PrimaryDataStoreHelper {
         dataStoreVO.setCapacityBytes(params.getCapacityBytes());
         dataStoreVO.setUsedBytes(params.getUsedBytes());
         dataStoreVO.setHypervisor(params.getHypervisorType());
-        dataStoreVO.setProtocolVersion(params.getProtocolVersion());
+
+        if (StringUtils.isNotBlank(params.getProtocolVersion())) {
+            dataStoreVO.setProtocolVersion(params.getProtocolVersion());
+        }
 
         Map<String, String> details = params.getDetails();
         if (params.getType() == StoragePoolType.SMB && details != null) {

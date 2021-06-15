@@ -52,7 +52,7 @@ public class LibvirtStoragePoolDefTest extends TestCase {
         String dir  = "/export/primary";
         String targetPath = "/mnt/" + uuid;
 
-        LibvirtStoragePoolDef pool = new LibvirtStoragePoolDef(type, name, uuid, host, dir, targetPath);
+        LibvirtStoragePoolDef pool = new LibvirtStoragePoolDef(type, name, uuid, host, dir, targetPath, null);
 
         String expectedXml = "<pool type='" + type.toString() + "'>\n<name>" + name + "</name>\n<uuid>" + uuid + "</uuid>\n" +
                              "<source>\n<host name='" + host + "'/>\n<dir path='" + dir + "'/>\n</source>\n<target>\n" +

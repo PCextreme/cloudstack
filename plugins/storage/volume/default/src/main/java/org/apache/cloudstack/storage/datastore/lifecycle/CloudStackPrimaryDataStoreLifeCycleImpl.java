@@ -73,7 +73,7 @@ import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLDecoder;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -192,9 +192,9 @@ public class CloudStackPrimaryDataStoreLifeCycleImpl implements PrimaryDataStore
         String storageHost = uri.getHost();
         String hostPath = null;
         try {
-           hostPath = URLDecoder.decode(uri.getPath(), "UTF-8");
+           hostPath = URLDecoder.decode(uri.getPath(), StandardCharsets.UTF_8.toString());
         } catch (UnsupportedEncodingException e) {
-            s_logger.error("[ignored] we are on a platform not supporting \"UTF-8\"!?!", e);
+            s_logger.error("Failed to decode URL! This platform does not support UTF-8; to run CloudStack please make sure to support UTF-8.", e);
         }
         if (hostPath == null) { // if decoding fails, use getPath() anyway
             hostPath = uri.getPath();
@@ -377,11 +377,11 @@ public class CloudStackPrimaryDataStoreLifeCycleImpl implements PrimaryDataStore
     }
 
     /**
-     * TODO
+     * Retrieves the NFS version for the given primary storage NFS URL.
      */
     private String retrieveNfsVersionNumber(String url) throws URISyntaxException {
         String nfsVersion = null;
-        List<NameValuePair> params = URLEncodedUtils.parse(new URI(url), Charset.forName("UTF-8"));
+        List<NameValuePair> params = URLEncodedUtils.parse(new URI(url), StandardCharsets.UTF_8);
         for (NameValuePair nameValPair : params) {
             if (NFS_VERSION_PARAM_NAME.equals(nameValPair.getName())) {
                 nfsVersion = nameValPair.getValue();

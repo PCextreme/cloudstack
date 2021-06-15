@@ -16,6 +16,8 @@
 // under the License.
 package com.cloud.hypervisor.kvm.resource;
 
+import com.cloud.utils.StringUtils;
+
 public class LibvirtStoragePoolDef {
     public enum PoolType {
         ISCSI("iscsi"), NETFS("netfs"), LOGICAL("logical"), DIR("dir"), RBD("rbd"), GLUSTERFS("glusterfs"), POWERFLEX("powerflex");
@@ -55,6 +57,7 @@ public class LibvirtStoragePoolDef {
     private String _authUsername;
     private AuthenticationType _authType;
     private String _secretUuid;
+    private String protocolVersion;
 
     public LibvirtStoragePoolDef(PoolType type, String poolName, String uuid, String host, int port, String dir, String targetPath) {
         _poolType = type;
@@ -66,13 +69,14 @@ public class LibvirtStoragePoolDef {
         _targetPath = targetPath;
     }
 
-    public LibvirtStoragePoolDef(PoolType type, String poolName, String uuid, String host, String dir, String targetPath) {
+    public LibvirtStoragePoolDef(PoolType type, String poolName, String uuid, String host, String dir, String targetPath, String protocolVersion) {
         _poolType = type;
         _poolName = poolName;
         _uuid = uuid;
         _sourceHost = host;
         _sourceDir = dir;
         _targetPath = targetPath;
+        this.protocolVersion = protocolVersion;
     }
 
     public LibvirtStoragePoolDef(PoolType type, String poolName, String uuid, String sourceHost, int sourcePort, String dir, String authUsername, AuthenticationType authType,
@@ -143,6 +147,9 @@ public class LibvirtStoragePoolDef {
             storagePoolBuilder.append("<source>\n");
             storagePoolBuilder.append("<host name='" + _sourceHost + "'/>\n");
             storagePoolBuilder.append("<dir path='" + _sourceDir + "'/>\n");
+            if(StringUtils.isNotBlank(protocolVersion)) {
+                storagePoolBuilder.append("<protocol ver='" + protocolVersion + "'/>\n");
+            }
             storagePoolBuilder.append("</source>\n");
         }
         if (_poolType == PoolType.RBD) {

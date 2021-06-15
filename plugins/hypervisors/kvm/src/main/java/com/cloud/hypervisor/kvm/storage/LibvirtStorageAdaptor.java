@@ -232,7 +232,7 @@ public class LibvirtStorageAdaptor implements StorageAdaptor {
 
     private StoragePool createNetfsStoragePool(PoolType fsType, Connect conn, String uuid, String host, String path) throws LibvirtException {
         String targetPath = _mountPoint + File.separator + uuid;
-        LibvirtStoragePoolDef spd = new LibvirtStoragePoolDef(fsType, uuid, uuid, host, path, targetPath);
+        LibvirtStoragePoolDef spd = new LibvirtStoragePoolDef(fsType, uuid, uuid, host, path, targetPath, null);
         _storageLayer.mkdir(targetPath);
         StoragePool sp = null;
         try {
@@ -264,7 +264,7 @@ public class LibvirtStorageAdaptor implements StorageAdaptor {
             s_logger.error(mountPoint + " does not exists. Check local.storage.path in agent.properties.");
             return null;
         }
-        LibvirtStoragePoolDef spd = new LibvirtStoragePoolDef(PoolType.DIR, uuid, uuid, host, path, path);
+        LibvirtStoragePoolDef spd = new LibvirtStoragePoolDef(PoolType.DIR, uuid, uuid, host, path, path, null);
         StoragePool sp = null;
         try {
             s_logger.debug(spd.toString());
@@ -295,7 +295,7 @@ public class LibvirtStorageAdaptor implements StorageAdaptor {
         String volgroupName = path;
         volgroupName = volgroupName.replaceFirst("/", "");
 
-        LibvirtStoragePoolDef spd = new LibvirtStoragePoolDef(PoolType.LOGICAL, volgroupName, uuid, host, volgroupPath, volgroupPath);
+        LibvirtStoragePoolDef spd = new LibvirtStoragePoolDef(PoolType.LOGICAL, volgroupName, uuid, host, volgroupPath, volgroupPath, null);
         StoragePool sp = null;
         try {
             s_logger.debug(spd.toString());
