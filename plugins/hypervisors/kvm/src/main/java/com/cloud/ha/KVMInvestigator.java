@@ -85,7 +85,7 @@ public class KVMInvestigator extends AdapterBase implements Investigator {
                 break;
             }
         }
-        Status agentStatus = Status.Disconnected;
+        Status agentStatus = Status.Up;
         if (hasNfs) {
             agentStatus = checkAgentStatusViaNfs(agent);
             s_logger.debug(String.format("Agent investigation was requested on host %s. Agent status via NFS heartbeat is %s.", agent, agentStatus));
